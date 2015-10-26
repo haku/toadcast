@@ -2,7 +2,6 @@ package com.vaguehope.toadcast.renderer;
 
 import org.fourthline.cling.model.types.UnsignedIntegerFourBytes;
 import org.fourthline.cling.model.types.UnsignedIntegerTwoBytes;
-import org.fourthline.cling.support.avtransport.impl.AVTransportService;
 import org.fourthline.cling.support.lastchange.LastChange;
 import org.fourthline.cling.support.model.Channel;
 import org.fourthline.cling.support.renderingcontrol.AbstractAudioRenderingControl;
@@ -14,9 +13,9 @@ public class MyAudioRenderingControl extends AbstractAudioRenderingControl {
 
 	private static final Logger LOG = LoggerFactory.getLogger(MyAudioRenderingControl.class);
 
-	private final AVTransportService avTransportService;
+	private final MyAVTransportService avTransportService;
 
-	public MyAudioRenderingControl (final LastChange lastChange, final AVTransportService avTransportService) {
+	public MyAudioRenderingControl (final LastChange lastChange, final MyAVTransportService avTransportService) {
 		super(lastChange);
 		this.avTransportService = avTransportService;
 	}
@@ -28,7 +27,7 @@ public class MyAudioRenderingControl extends AbstractAudioRenderingControl {
 
 	@Override
 	public void setMute (final UnsignedIntegerFourBytes instanceId, final String channelName, final boolean desiredMute) throws RenderingControlException {
-		LOG.info("TODO: setMute: {}", desiredMute);
+		LOG.info("TODO setMute({}, {}, {})", instanceId, channelName, desiredMute);
 	}
 
 	@Override
@@ -38,7 +37,7 @@ public class MyAudioRenderingControl extends AbstractAudioRenderingControl {
 
 	@Override
 	public void setVolume (final UnsignedIntegerFourBytes instanceId, final String channelName, final UnsignedIntegerTwoBytes desiredVolume) throws RenderingControlException {
-		LOG.info("TODO: setVolume: {}", desiredVolume);
+		LOG.info("TODO setVolume({}, {}, {})", instanceId, channelName, desiredVolume);
 	}
 
 	@Override
@@ -50,4 +49,5 @@ public class MyAudioRenderingControl extends AbstractAudioRenderingControl {
 	public UnsignedIntegerFourBytes[] getCurrentInstanceIds () {
 		return this.avTransportService.getCurrentInstanceIds();
 	}
+
 }

@@ -26,30 +26,26 @@ import org.fourthline.cling.model.resource.Resource;
 import org.fourthline.cling.model.types.DeviceType;
 import org.fourthline.cling.model.types.UDADeviceType;
 import org.fourthline.cling.model.types.UDN;
-import org.fourthline.cling.model.types.UnsignedIntegerFourBytes;
 import org.fourthline.cling.protocol.ProtocolFactory;
 import org.fourthline.cling.registry.Registry;
-import org.fourthline.cling.support.avtransport.impl.AVTransportService;
 import org.fourthline.cling.support.avtransport.lastchange.AVTransportLastChangeParser;
 import org.fourthline.cling.support.connectionmanager.ConnectionManagerService;
 import org.fourthline.cling.support.lastchange.LastChange;
 import org.fourthline.cling.support.lastchange.LastChangeAwareServiceManager;
-import org.fourthline.cling.support.lastchange.LastChangeParser;
 import org.fourthline.cling.support.renderingcontrol.lastchange.RenderingControlLastChangeParser;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.sun.akuma.Daemon;
-import com.vaguehope.toadcast.renderer.MyAudioRenderingControl;
-import com.vaguehope.toadcast.renderer.MyRendererNoMediaPresent;
-import com.vaguehope.toadcast.renderer.MyRendererStateMachine;
-
 import su.litvak.chromecast.api.v2.Application;
 import su.litvak.chromecast.api.v2.ChromeCast;
 import su.litvak.chromecast.api.v2.MediaStatus;
 import su.litvak.chromecast.api.v2.MediaStatus.PlayerState;
+
+import com.sun.akuma.Daemon;
+import com.vaguehope.toadcast.renderer.MyAVTransportService;
+import com.vaguehope.toadcast.renderer.MyAudioRenderingControl;
 
 public class Main {
 
@@ -61,6 +57,8 @@ public class Main {
 	}
 
 	public static void main (final String[] rawArgs) throws Exception {// NOSONAR
+		LogHelper.bridgeJul();
+
 		final PrintStream err = System.err;
 		final Args args = new Args();
 		final CmdLineParser parser = new CmdLineParser(args);
@@ -113,34 +111,25 @@ public class Main {
 		final LocalService<ConnectionManagerService> connManSrv = binder.read(ConnectionManagerService.class);
 		connManSrv.setManager(new DefaultServiceManager<ConnectionManagerService>(connManSrv, ConnectionManagerService.class));
 
-		final AVTransportService avTransportService = new AVTransportService(MyRendererStateMachine.class, MyRendererNoMediaPresent.class);
-		final LocalService<AVTransportService> avtSrv = binder.read(AVTransportService.class);
-		// Service's which have "logical" instances are very special, they use the
-		// "LastChange" mechanism for eventing. This requires some extra wrappers.
-		final LastChangeParser lastChangeParser = new AVTransportLastChangeParser();
-		avtSrv.setManager(new LastChangeAwareServiceManager<AVTransportService>(avtSrv, lastChangeParser) {
+		final LocalService<MyAVTransportService> avtSrv = binder.read(MyAVTransportService.class);
+		final LastChange avTransportLastChange = new LastChange(new AVTransportLastChangeParser());
+		final MyAVTransportService avTransportService = new MyAVTransportService(avTransportLastChange);
+		avtSrv.setManager(new LastChangeAwareServiceManager<MyAVTransportService>(avtSrv, new AVTransportLastChangeParser()) {
 			@Override
-			protected AVTransportService createServiceInstance () throws Exception {
+			protected MyAVTransportService createServiceInstance () throws Exception {
 				return avTransportService;
 			}
 		});
 
-		// The Rendering Control just passes the calls on to the backend players
 		final LocalService<MyAudioRenderingControl> rendCtlSrv = binder.read(MyAudioRenderingControl.class);
 		final LastChange renderingControlLastChange = new LastChange(new RenderingControlLastChangeParser());
+		final MyAudioRenderingControl audioRenderingControl = new MyAudioRenderingControl(renderingControlLastChange, avTransportService);
 		rendCtlSrv.setManager(new LastChangeAwareServiceManager<MyAudioRenderingControl>(rendCtlSrv, new RenderingControlLastChangeParser()) {
 			@Override
 			protected MyAudioRenderingControl createServiceInstance () throws Exception {
-				return new MyAudioRenderingControl(renderingControlLastChange, avTransportService);
+				return audioRenderingControl;
 			}
 		});
-
-
-		AVTransportService implementation = avtSrv.getManager().getImplementation();
-		for (UnsignedIntegerFourBytes id : implementation.getCurrentInstanceIds()) {
-			LOG.info("actions for {}: {}", id, implementation.getCurrentTransportActionsString(id));
-		}
-
 
 		Executors.newScheduledThreadPool(1).scheduleWithFixedDelay(new Runnable() {
 			@Override
