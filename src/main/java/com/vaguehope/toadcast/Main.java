@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -14,6 +15,7 @@ import org.fourthline.cling.UpnpService;
 import org.fourthline.cling.UpnpServiceImpl;
 import org.fourthline.cling.binding.annotations.AnnotationLocalServiceBinder;
 import org.fourthline.cling.model.DefaultServiceManager;
+import org.fourthline.cling.model.ValidationException;
 import org.fourthline.cling.model.meta.DeviceDetails;
 import org.fourthline.cling.model.meta.DeviceIdentity;
 import org.fourthline.cling.model.meta.Icon;
@@ -38,18 +40,15 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import su.litvak.chromecast.api.v2.Application;
 import su.litvak.chromecast.api.v2.ChromeCast;
-import su.litvak.chromecast.api.v2.MediaStatus;
-import su.litvak.chromecast.api.v2.MediaStatus.PlayerState;
 
 import com.sun.akuma.Daemon;
+import com.vaguehope.toadcast.renderer.CastUtils;
 import com.vaguehope.toadcast.renderer.MyAVTransportService;
 import com.vaguehope.toadcast.renderer.MyAudioRenderingControl;
 
 public class Main {
 
-	private final static String CHROME_CAST_DEFAULT_APP_ID = "CC1AD845";
 	private static final Logger LOG = LoggerFactory.getLogger(Main.class);
 
 	private Main () {
@@ -65,7 +64,8 @@ public class Main {
 		try {
 			parser.parseArgument(rawArgs);
 			daemonise(args);
-			run(args);
+			start(args);
+			new CountDownLatch(1).await();
 			System.exit(0);
 		}
 		catch (final CmdLineException e) {
@@ -92,7 +92,24 @@ public class Main {
 		}
 	}
 
-	private static void run (final Args args) throws Exception {// NOSONAR
+	private static void start (final Args args) throws Exception {// NOSONAR
+		final ChromeCast chromecast = connectChromecast(args);
+		startAvService(chromecast);
+	}
+
+	private static ChromeCast connectChromecast (final Args args) throws Exception {// NOSONAR
+		// TODO
+		// ChromeCasts.startDiscovery();
+		// ChromeCasts.get().get(0);
+
+		final ChromeCast chromecast = new ChromeCast(args.getChromecast());
+		chromecast.connect();
+		CastUtils.ensureReady(chromecast);
+		LOG.info("chromeCast ready: {}", chromecast.getName());
+		return chromecast;
+	}
+
+	private static void startAvService (final ChromeCast chromecast) throws IOException, UnknownHostException, ValidationException {
 		final UpnpService upnpService = makeUpnpServer();
 
 		final String hostName = InetAddress.getLocalHost().getHostName();
@@ -113,7 +130,7 @@ public class Main {
 
 		final LocalService<MyAVTransportService> avtSrv = binder.read(MyAVTransportService.class);
 		final LastChange avTransportLastChange = new LastChange(new AVTransportLastChangeParser());
-		final MyAVTransportService avTransportService = new MyAVTransportService(avTransportLastChange);
+		final MyAVTransportService avTransportService = new MyAVTransportService(avTransportLastChange, chromecast);
 		avtSrv.setManager(new LastChangeAwareServiceManager<MyAVTransportService>(avtSrv, new AVTransportLastChangeParser()) {
 			@Override
 			protected MyAVTransportService createServiceInstance () throws Exception {
@@ -144,7 +161,6 @@ public class Main {
 		upnpService.getRegistry().addDevice(device);
 
 		upnpService.getControlPoint().search();// In case this helps announce our presence.  Untested.
-		new CountDownLatch(1).await();
 	}
 
 	private static UpnpService makeUpnpServer () throws IOException {
@@ -171,7 +187,7 @@ public class Main {
 		return upnpService;
 	}
 
-	public static Icon createDeviceIcon () throws IOException {
+	private static Icon createDeviceIcon () throws IOException {
 		final InputStream res = Main.class.getResourceAsStream("/icon.png");
 		if (res == null) throw new IllegalStateException("Icon not found.");
 		try {
@@ -181,27 +197,6 @@ public class Main {
 		}
 		finally {
 			res.close();
-		}
-	}
-
-	private static void run2 (final Args args) throws Exception {// NOSONAR
-		final ChromeCast chromecast = new ChromeCast(args.getChromecast());
-		chromecast.connect();
-		final Application runningApp = chromecast.getRunningApp();
-		if (runningApp != null && !runningApp.id.equals(CHROME_CAST_DEFAULT_APP_ID)) {
-			chromecast.stopApp();
-		}
-		chromecast.launchApp(CHROME_CAST_DEFAULT_APP_ID);
-		for (final String path : args.getPaths()) {
-			LOG.info("Playing: {}", path);
-			chromecast.load("Toad Cast", null, path, "audio/mpeg");
-			MediaStatus mediaStatus = chromecast.getMediaStatus();
-			while (mediaStatus != null && (mediaStatus.playerState == PlayerState.BUFFERING || mediaStatus.playerState == PlayerState.PLAYING || mediaStatus.playerState == PlayerState.PAUSED)) {
-				LOG.info("Playing: playerState={} currentTime={}", mediaStatus.playerState, mediaStatus.currentTime);
-				Thread.sleep(5000);
-				mediaStatus = chromecast.getMediaStatus();
-			}
-			LOG.info("mediaStatus={}", mediaStatus);
 		}
 	}
 
