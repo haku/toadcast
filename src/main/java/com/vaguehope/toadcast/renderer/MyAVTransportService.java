@@ -36,7 +36,7 @@ public class MyAVTransportService extends AbstractAVTransportService {
 
 	private final ChromeCast chromecast;
 
-	private MediaInfo currentMediaInfo = new MediaInfo();
+	private volatile MediaInfo currentMediaInfo = new MediaInfo();
 
 	public MyAVTransportService (final LastChange lastChange, final ChromeCast chromecast) {
 		super(lastChange);
