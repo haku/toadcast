@@ -1,4 +1,4 @@
-package com.vaguehope.toadcast.renderer;
+package com.vaguehope.toadcast;
 
 import java.io.IOException;
 
