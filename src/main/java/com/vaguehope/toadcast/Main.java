@@ -40,12 +40,12 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import su.litvak.chromecast.api.v2.ChromeCast;
-
 import com.sun.akuma.Daemon;
 import com.vaguehope.toadcast.renderer.CastUtils;
 import com.vaguehope.toadcast.renderer.MyAVTransportService;
 import com.vaguehope.toadcast.renderer.MyAudioRenderingControl;
+
+import su.litvak.chromecast.api.v2.ChromeCast;
 
 public class Main {
 
@@ -80,6 +80,15 @@ public class Main {
 		}
 	}
 
+	private static void help (final CmdLineParser parser, final PrintStream ps) {
+		ps.print("Usage: ");
+		ps.print(C.APPNAME);
+		parser.printSingleLineUsage(ps);
+		ps.println();
+		parser.printUsage(ps);
+		ps.println();
+	}
+
 	private static void daemonise (final Args args) throws Exception {
 		final Daemon d = new Daemon.WithoutChdir();
 		if (d.isDaemonized()) {
@@ -94,7 +103,7 @@ public class Main {
 
 	private static void start (final Args args) throws Exception {// NOSONAR
 		final ChromeCast chromecast = connectChromecast(args);
-		startAvService(chromecast);
+		startUpnpService(chromecast);
 	}
 
 	private static ChromeCast connectChromecast (final Args args) throws Exception {// NOSONAR
@@ -109,58 +118,16 @@ public class Main {
 		return chromecast;
 	}
 
-	private static void startAvService (final ChromeCast chromecast) throws IOException, UnknownHostException, ValidationException {
-		final UpnpService upnpService = makeUpnpServer();
-
+	private static void startUpnpService (final ChromeCast chromecast) throws IOException, UnknownHostException, ValidationException {
 		final String hostName = InetAddress.getLocalHost().getHostName();
 		LOG.info("hostName: {}", hostName);
 
 		final UDN usi = UDN.uniqueSystemIdentifier("ToadCast-ChromeCastRenderer");
 		LOG.info("uniqueSystemIdentifier: {}", usi);
-		final DeviceType type = new UDADeviceType("MediaRenderer", 1);
-		final DeviceDetails details = new DeviceDetails(C.METADATA_MODEL_NAME + " (" + hostName + ")", new ManufacturerDetails(C.METADATA_MANUFACTURER), new ModelDetails(C.METADATA_MODEL_NAME, C.METADATA_MODEL_DESCRIPTION, C.METADATA_MODEL_NUMBER));
-		final Icon icon = createDeviceIcon();
 
-		// http://4thline.org/projects/cling/support/manual/cling-support-manual.html
-
-		final AnnotationLocalServiceBinder binder = new AnnotationLocalServiceBinder();
-
-		final LocalService<ConnectionManagerService> connManSrv = binder.read(ConnectionManagerService.class);
-		connManSrv.setManager(new DefaultServiceManager<ConnectionManagerService>(connManSrv, ConnectionManagerService.class));
-
-		final LocalService<MyAVTransportService> avtSrv = binder.read(MyAVTransportService.class);
-		final LastChange avTransportLastChange = new LastChange(new AVTransportLastChangeParser());
-		final MyAVTransportService avTransportService = new MyAVTransportService(avTransportLastChange, chromecast);
-		avtSrv.setManager(new LastChangeAwareServiceManager<MyAVTransportService>(avtSrv, new AVTransportLastChangeParser()) {
-			@Override
-			protected MyAVTransportService createServiceInstance () throws Exception {
-				return avTransportService;
-			}
-		});
-
-		final LocalService<MyAudioRenderingControl> rendCtlSrv = binder.read(MyAudioRenderingControl.class);
-		final LastChange renderingControlLastChange = new LastChange(new RenderingControlLastChangeParser());
-		final MyAudioRenderingControl audioRenderingControl = new MyAudioRenderingControl(renderingControlLastChange, avTransportService);
-		rendCtlSrv.setManager(new LastChangeAwareServiceManager<MyAudioRenderingControl>(rendCtlSrv, new RenderingControlLastChangeParser()) {
-			@Override
-			protected MyAudioRenderingControl createServiceInstance () throws Exception {
-				return audioRenderingControl;
-			}
-		});
-
-		Executors.newScheduledThreadPool(1).scheduleWithFixedDelay(new Runnable() {
-			@Override
-			public void run () {
-				((LastChangeAwareServiceManager) avtSrv.getManager()).fireLastChange();
-				((LastChangeAwareServiceManager) rendCtlSrv.getManager()).fireLastChange();
-			}
-		}, 5, 5, TimeUnit.SECONDS);
-
-		final LocalDevice device = new LocalDevice(new DeviceIdentity(usi, C.MIN_ADVERTISEMENT_AGE_SECONDS), type, details, icon,
-				new LocalService[] { avtSrv, rendCtlSrv, connManSrv });
-		upnpService.getRegistry().addDevice(device);
-
-		upnpService.getControlPoint().search();// In case this helps announce our presence.  Untested.
+		final UpnpService upnpService = makeUpnpServer();
+		upnpService.getRegistry().addDevice(makeMediaRendererDevice(hostName, usi, chromecast));
+		upnpService.getControlPoint().search();// In case this helps announce our presence.  Unproven.
 	}
 
 	private static UpnpService makeUpnpServer () throws IOException {
@@ -200,13 +167,48 @@ public class Main {
 		}
 	}
 
-	private static void help (final CmdLineParser parser, final PrintStream ps) {
-		ps.print("Usage: ");
-		ps.print(C.APPNAME);
-		parser.printSingleLineUsage(ps);
-		ps.println();
-		parser.printUsage(ps);
-		ps.println();
+	private static LocalDevice makeMediaRendererDevice (final String hostName, final UDN usi, final ChromeCast chromecast) throws IOException, ValidationException {
+		final DeviceType type = new UDADeviceType("MediaRenderer", 1);
+		final DeviceDetails details = new DeviceDetails(C.METADATA_MODEL_NAME + " (" + hostName + ")", new ManufacturerDetails(C.METADATA_MANUFACTURER), new ModelDetails(C.METADATA_MODEL_NAME, C.METADATA_MODEL_DESCRIPTION, C.METADATA_MODEL_NUMBER));
+		final Icon icon = createDeviceIcon();
+
+		// http://4thline.org/projects/cling/support/manual/cling-support-manual.html
+
+		final AnnotationLocalServiceBinder binder = new AnnotationLocalServiceBinder();
+
+		final LocalService<ConnectionManagerService> connManSrv = binder.read(ConnectionManagerService.class);
+		connManSrv.setManager(new DefaultServiceManager<ConnectionManagerService>(connManSrv, ConnectionManagerService.class));
+
+		final LocalService<MyAVTransportService> avtSrv = binder.read(MyAVTransportService.class);
+		final LastChange avTransportLastChange = new LastChange(new AVTransportLastChangeParser());
+		final MyAVTransportService avTransportService = new MyAVTransportService(avTransportLastChange, chromecast);
+		avtSrv.setManager(new LastChangeAwareServiceManager<MyAVTransportService>(avtSrv, new AVTransportLastChangeParser()) {
+			@Override
+			protected MyAVTransportService createServiceInstance () throws Exception {
+				return avTransportService;
+			}
+		});
+
+		final LocalService<MyAudioRenderingControl> rendCtlSrv = binder.read(MyAudioRenderingControl.class);
+		final LastChange renderingControlLastChange = new LastChange(new RenderingControlLastChangeParser());
+		final MyAudioRenderingControl audioRenderingControl = new MyAudioRenderingControl(renderingControlLastChange, avTransportService);
+		rendCtlSrv.setManager(new LastChangeAwareServiceManager<MyAudioRenderingControl>(rendCtlSrv, new RenderingControlLastChangeParser()) {
+			@Override
+			protected MyAudioRenderingControl createServiceInstance () throws Exception {
+				return audioRenderingControl;
+			}
+		});
+
+		Executors.newScheduledThreadPool(1).scheduleWithFixedDelay(new Runnable() {
+			@Override
+			public void run () {
+				((LastChangeAwareServiceManager) avtSrv.getManager()).fireLastChange();
+				((LastChangeAwareServiceManager) rendCtlSrv.getManager()).fireLastChange();
+			}
+		}, 5, 5, TimeUnit.SECONDS);
+
+		final LocalDevice device = new LocalDevice(new DeviceIdentity(usi, C.MIN_ADVERTISEMENT_AGE_SECONDS), type, details, icon, new LocalService[] { avtSrv, rendCtlSrv, connManSrv });
+		return device;
 	}
 
 }
