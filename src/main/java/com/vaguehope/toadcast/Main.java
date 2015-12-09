@@ -5,11 +5,15 @@ import java.io.InputStream;
 import java.io.PrintStream;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.security.GeneralSecurityException;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.fourthline.cling.UpnpService;
 import org.fourthline.cling.UpnpServiceImpl;
@@ -43,6 +47,8 @@ import org.slf4j.LoggerFactory;
 import com.sun.akuma.Daemon;
 
 import su.litvak.chromecast.api.v2.ChromeCast;
+import su.litvak.chromecast.api.v2.ChromeCasts;
+import su.litvak.chromecast.api.v2.ChromeCastsListener;
 
 public class Main {
 
@@ -99,23 +105,52 @@ public class Main {
 	}
 
 	private static void start (final Args args) throws Exception {// NOSONAR
-		final ChromeCast chromecast = connectChromecast(args);
-		startUpnpService(chromecast);
+		final AtomicReference<ChromeCast> holder = new AtomicReference<ChromeCast>();
+		startChromecastWatcher(args, holder);
+		startUpnpService(holder);
 	}
 
-	private static ChromeCast connectChromecast (final Args args) throws Exception {// NOSONAR
-		// TODO
-		// ChromeCasts.startDiscovery();
-		// ChromeCasts.get().get(0);
+	private static void startChromecastWatcher (final Args args, final AtomicReference<ChromeCast> holder) throws Exception {// NOSONAR
+		ChromeCasts.registerListener(new ChromeCastsListener() {
+			@Override
+			public void newChromeCastDiscovered (final ChromeCast chromecast) {
+				final String name = chromecast.getName();
+				if (name != null && name.toLowerCase(Locale.ENGLISH).contains(args.getChromecast().toLowerCase(Locale.ENGLISH))) {
+					if (holder.compareAndSet(null, chromecast)) {
+						try {
+							chromecast.connect();
+							CastUtils.ensureReady(chromecast);
+							LOG.info("found: {}", name);
+						}
+						catch (final IOException | GeneralSecurityException e) {
+							holder.compareAndSet(chromecast, null);
+							LOG.warn("Failed to connect: ", e);
+						}
+					}
+				}
+			}
 
-		final ChromeCast chromecast = new ChromeCast(args.getChromecast());
-		chromecast.connect();
-		CastUtils.ensureReady(chromecast);
-		LOG.info("chromeCast ready: {}", chromecast.getName());
-		return chromecast;
+			@Override
+			public void chromeCastRemoved (final ChromeCast chromecast) {
+				final ChromeCast h = holder.get();
+				if (h != null && Objects.equals(h.getAddress(), chromecast.getAddress())) {
+					if (holder.compareAndSet(h, null)) {
+						try {
+							h.disconnect();
+							LOG.info("lost: {}", h.getName());
+						}
+						catch (final IOException e) {
+							LOG.warn("Error while disconnecting: ", e);
+						}
+					}
+				}
+			}
+		});
+		ChromeCasts.startDiscovery();
+		LOG.info("Watching for ChromeCast {} ...", args.getChromecast());
 	}
 
-	private static void startUpnpService (final ChromeCast chromecast) throws IOException, UnknownHostException, ValidationException {
+	private static void startUpnpService (final AtomicReference<ChromeCast> holder) throws IOException, UnknownHostException, ValidationException {
 		final String hostName = InetAddress.getLocalHost().getHostName();
 		LOG.info("hostName: {}", hostName);
 
@@ -123,7 +158,7 @@ public class Main {
 		LOG.info("uniqueSystemIdentifier: {}", usi);
 
 		final UpnpService upnpService = makeUpnpServer();
-		upnpService.getRegistry().addDevice(makeMediaRendererDevice(hostName, usi, chromecast));
+		upnpService.getRegistry().addDevice(makeMediaRendererDevice(hostName, usi, holder));
 		upnpService.getControlPoint().search();// In case this helps announce our presence.  Unproven.
 	}
 
@@ -164,7 +199,7 @@ public class Main {
 		}
 	}
 
-	private static LocalDevice makeMediaRendererDevice (final String hostName, final UDN usi, final ChromeCast chromecast) throws IOException, ValidationException {
+	private static LocalDevice makeMediaRendererDevice (final String hostName, final UDN usi, final AtomicReference<ChromeCast> holder) throws IOException, ValidationException {
 		final DeviceType type = new UDADeviceType("MediaRenderer", 1);
 		final DeviceDetails details = new DeviceDetails(C.METADATA_MODEL_NAME + " (" + hostName + ")", new ManufacturerDetails(C.METADATA_MANUFACTURER), new ModelDetails(C.METADATA_MODEL_NAME, C.METADATA_MODEL_DESCRIPTION, C.METADATA_MODEL_NUMBER));
 		final Icon icon = createDeviceIcon();
@@ -178,7 +213,7 @@ public class Main {
 
 		final LocalService<MyAVTransportService> avtSrv = binder.read(MyAVTransportService.class);
 		final LastChange avTransportLastChange = new LastChange(new AVTransportLastChangeParser());
-		final MyAVTransportService avTransportService = new MyAVTransportService(avTransportLastChange, chromecast);
+		final MyAVTransportService avTransportService = new MyAVTransportService(avTransportLastChange, holder);
 		avtSrv.setManager(new LastChangeAwareServiceManager<MyAVTransportService>(avtSrv, new AVTransportLastChangeParser()) {
 			@Override
 			protected MyAVTransportService createServiceInstance () throws Exception {

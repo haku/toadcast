@@ -3,6 +3,7 @@ package com.vaguehope.toadcast;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.fourthline.cling.model.ModelUtil;
 import org.fourthline.cling.model.types.ErrorCode;
@@ -34,13 +35,19 @@ public class MyAVTransportService extends AbstractAVTransportService {
 
 	private static final Logger LOG = LoggerFactory.getLogger(MyAVTransportService.class);
 
-	private final ChromeCast chromecast;
+	private final AtomicReference<ChromeCast> chromecastHolder;
 
 	private volatile MediaInfo currentMediaInfo = new MediaInfo();
 
-	public MyAVTransportService (final LastChange lastChange, final ChromeCast chromecast) {
+	public MyAVTransportService (final LastChange lastChange, final AtomicReference<ChromeCast> chromecastHolder) {
 		super(lastChange);
-		this.chromecast = chromecast;
+		this.chromecastHolder = chromecastHolder;
+	}
+
+	private ChromeCast getChromeCast () throws AVTransportException {
+		final ChromeCast c = this.chromecastHolder.get();
+		if (c == null) throw new AVTransportException(ErrorCode.ACTION_FAILED, "ChromeCast not found.");
+		return c;
 	}
 
 	@Override
@@ -88,7 +95,7 @@ public class MyAVTransportService extends AbstractAVTransportService {
 	@Override
 	public TransportInfo getTransportInfo (final UnsignedIntegerFourBytes instanceId) throws AVTransportException {
 		try {
-			final MediaStatus mediaStatus = this.chromecast.getMediaStatus(); // TODO cache this?
+			final MediaStatus mediaStatus = getChromeCast().getMediaStatus(); // TODO cache this?
 
 			final TransportState transportState;
 			if (mediaStatus != null) {
@@ -121,7 +128,7 @@ public class MyAVTransportService extends AbstractAVTransportService {
 	@Override
 	public PositionInfo getPositionInfo (final UnsignedIntegerFourBytes instanceId) throws AVTransportException {
 		try {
-			final MediaStatus mediaStatus = this.chromecast.getMediaStatus(); // TODO cache this?
+			final MediaStatus mediaStatus = getChromeCast().getMediaStatus(); // TODO cache this?
 
 			String duration = "00:00:00";
 			String position = "00:00:00";
@@ -173,12 +180,13 @@ public class MyAVTransportService extends AbstractAVTransportService {
 			this.currentMediaInfo = new MediaInfo();
 
 			// FIXME this is not ideal.
-			final MediaStatus mediaStatus = this.chromecast.getMediaStatus(); // TODO cache this?
+			final ChromeCast chromeCast = getChromeCast();
+			final MediaStatus mediaStatus = chromeCast.getMediaStatus(); // TODO cache this?
 			if (mediaStatus != null) {
 				switch (mediaStatus.playerState) {
 					case BUFFERING:
 					case PLAYING:
-						this.chromecast.pause();
+						chromeCast.pause();
 					default:
 				}
 			}
@@ -193,9 +201,10 @@ public class MyAVTransportService extends AbstractAVTransportService {
 		LOG.info("play({})", instanceId);
 		if (this.currentMediaInfo == null) throw new AVTransportException(ErrorCode.ACTION_FAILED, "currentMediaInfo not set.");
 		try {
-			CastUtils.ensureReady(this.chromecast); // FIXME lazy.
+			final ChromeCast chromeCast = getChromeCast();
+			CastUtils.ensureReady(chromeCast); // FIXME lazy.
 
-			final MediaStatus mediaStatus = this.chromecast.getMediaStatus(); // TODO cache this?
+			final MediaStatus mediaStatus = chromeCast.getMediaStatus(); // TODO cache this?
 
 			final Media media = mediaStatus != null ? mediaStatus.media : null;
 			final String mediaUrl = media != null ? media.url : null;
@@ -203,11 +212,11 @@ public class MyAVTransportService extends AbstractAVTransportService {
 
 			// TODO better way to tell different between load and resume?
 			if (Objects.equals(mediaUrl, this.currentMediaInfo.getCurrentURI()) && playerState == PlayerState.PAUSED) {
-				this.chromecast.play();
+				chromeCast.play();
 			}
 			else {
 				// TODO identify MIME type.
-				this.chromecast.load("Toad Cast", null, this.currentMediaInfo.getCurrentURI(), "audio/mpeg");
+				chromeCast.load("Toad Cast", null, this.currentMediaInfo.getCurrentURI(), "audio/mpeg");
 			}
 		}
 		catch (final IOException e) {
@@ -223,7 +232,7 @@ public class MyAVTransportService extends AbstractAVTransportService {
 	public void pause (final UnsignedIntegerFourBytes instanceId) throws AVTransportException {
 		LOG.info("pause({})", instanceId);
 		try {
-			this.chromecast.pause();
+			getChromeCast().pause();
 		}
 		catch (final IOException e) {
 			throw new AVTransportException(ErrorCode.ACTION_FAILED.getCode(), e.toString(), e);
