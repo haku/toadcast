@@ -2,6 +2,7 @@ package com.vaguehope.toadcast;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -11,16 +12,21 @@ import org.fourthline.cling.model.types.UnsignedIntegerFourBytes;
 import org.fourthline.cling.support.avtransport.AVTransportErrorCode;
 import org.fourthline.cling.support.avtransport.AVTransportException;
 import org.fourthline.cling.support.avtransport.AbstractAVTransportService;
+import org.fourthline.cling.support.contentdirectory.DIDLParser;
 import org.fourthline.cling.support.lastchange.LastChange;
+import org.fourthline.cling.support.model.DIDLContent;
+import org.fourthline.cling.support.model.DIDLObject;
 import org.fourthline.cling.support.model.DeviceCapabilities;
 import org.fourthline.cling.support.model.MediaInfo;
 import org.fourthline.cling.support.model.PlayMode;
 import org.fourthline.cling.support.model.PositionInfo;
+import org.fourthline.cling.support.model.Res;
 import org.fourthline.cling.support.model.StorageMedium;
 import org.fourthline.cling.support.model.TransportAction;
 import org.fourthline.cling.support.model.TransportInfo;
 import org.fourthline.cling.support.model.TransportSettings;
 import org.fourthline.cling.support.model.TransportState;
+import org.fourthline.cling.support.model.item.Item;
 import org.seamless.http.HttpFetch;
 import org.seamless.util.URIUtil;
 import org.slf4j.Logger;
@@ -38,6 +44,7 @@ public class MyAVTransportService extends AbstractAVTransportService {
 	private final AtomicReference<ChromeCast> chromecastHolder;
 
 	private volatile MediaInfo currentMediaInfo = new MediaInfo();
+	private volatile Item currentMediaItem;
 
 	public MyAVTransportService (final LastChange lastChange, final AtomicReference<ChromeCast> chromecastHolder) {
 		super(lastChange);
@@ -79,7 +86,29 @@ public class MyAVTransportService extends AbstractAVTransportService {
 			throw new AVTransportException(ErrorCode.INVALID_ARGS, "Only HTTP and HTTPS: resource identifiers are supported, not '" + uri.getScheme() + "'.");
 		}
 
+		final Item item;
+		if (currentURIMetaData != null) {
+			final DIDLContent metadata;
+			try {
+				metadata = new DIDLParser().parse(currentURIMetaData);
+			}
+			catch (final Exception e) {
+				throw new AVTransportException(ErrorCode.INVALID_ARGS, "Invalid DIDL metadata: " + e);
+			}
+
+			if (metadata.getItems().size() == 1) {
+				item = metadata.getItems().get(0);
+			}
+			else {
+				throw new AVTransportException(ErrorCode.INVALID_ARGS, "DIDL metadata should contain only one item, found " + metadata.getItems().size() + ".");
+			}
+		}
+		else {
+			item = null;
+		}
+
 		this.currentMediaInfo = new MediaInfo(uri.toString(), currentURIMetaData);
+		this.currentMediaItem = item;
 	}
 
 	@Override
@@ -199,7 +228,13 @@ public class MyAVTransportService extends AbstractAVTransportService {
 	@Override
 	public void play (final UnsignedIntegerFourBytes instanceId, final String speed) throws AVTransportException {
 		LOG.info("play({})", instanceId);
-		if (this.currentMediaInfo == null) throw new AVTransportException(ErrorCode.ACTION_FAILED, "currentMediaInfo not set.");
+
+		// FIXME not thread safe.
+		final MediaInfo mediaInfo = this.currentMediaInfo;
+		final Item item = this.currentMediaItem;
+
+		if (mediaInfo == null) throw new AVTransportException(ErrorCode.ACTION_FAILED, "currentMediaInfo not set.");
+
 		try {
 			final ChromeCast chromeCast = getChromeCast();
 			CastUtils.ensureReady(chromeCast); // FIXME lazy.
@@ -211,12 +246,39 @@ public class MyAVTransportService extends AbstractAVTransportService {
 			final PlayerState playerState = mediaStatus != null ? mediaStatus.playerState : null;
 
 			// TODO better way to tell different between load and resume?
-			if (Objects.equals(mediaUrl, this.currentMediaInfo.getCurrentURI()) && playerState == PlayerState.PAUSED) {
+			if (Objects.equals(mediaUrl, mediaInfo.getCurrentURI()) && playerState == PlayerState.PAUSED) {
 				chromeCast.play();
 			}
 			else {
-				// TODO identify MIME type.
-				chromeCast.load("Toad Cast", null, this.currentMediaInfo.getCurrentURI(), "audio/mpeg");
+				String title = "Toad Cast";
+				String thumb = null;
+				String contentType = "audio/mpeg";
+				if (item != null) {
+					if (item.getTitle() != null) title = item.getTitle();
+
+					final List<URI> arts = item.getPropertyValues(DIDLObject.Property.UPNP.ALBUM_ART_URI.class);
+					if (arts != null && arts.size() > 0) {
+						final URI artUri = arts.get(0);
+						final URI mediaUri = URI.create(mediaInfo.getCurrentURI());
+						thumb = mediaUri.relativize(artUri).toString();
+					}
+
+					Res res = null;
+					if (item.getResources().size() > 1) {
+						for (final Res r : item.getResources()) {
+							if ("audio".equalsIgnoreCase(r.getProtocolInfo().getContentFormatMimeType().getType())) {
+								res = r;
+							}
+						}
+					}
+					if (res == null && item.getResources().size() > 0) {
+						res = item.getResources().get(0);
+					}
+					if (res != null) {
+						contentType = res.getProtocolInfo().getContentFormatMimeType().toStringNoParameters();
+					}
+				}
+				chromeCast.load(title, thumb, mediaInfo.getCurrentURI(), contentType);
 			}
 		}
 		catch (final IOException e) {
