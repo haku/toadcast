@@ -107,7 +107,7 @@ public class Main {
 	private static void start (final Args args) throws Exception {// NOSONAR
 		final AtomicReference<ChromeCast> holder = new AtomicReference<ChromeCast>();
 		startChromecastWatcher(args, holder);
-		startUpnpService(holder);
+		startUpnpService(args, holder);
 	}
 
 	private static void startChromecastWatcher (final Args args, final AtomicReference<ChromeCast> holder) throws Exception {// NOSONAR
@@ -150,15 +150,17 @@ public class Main {
 		LOG.info("Watching for ChromeCast {} ...", args.getChromecast());
 	}
 
-	private static void startUpnpService (final AtomicReference<ChromeCast> holder) throws IOException, UnknownHostException, ValidationException {
+	private static void startUpnpService (final Args args, final AtomicReference<ChromeCast> holder) throws IOException, UnknownHostException, ValidationException {
 		final String hostName = InetAddress.getLocalHost().getHostName();
 		LOG.info("hostName: {}", hostName);
+
+		final String friendlyName = String.format("%s \"%s\" (%s)", C.METADATA_MODEL_NAME, args.getChromecast(), hostName);
 
 		final UDN usi = UDN.uniqueSystemIdentifier("ToadCast-ChromeCastRenderer");
 		LOG.info("uniqueSystemIdentifier: {}", usi);
 
 		final UpnpService upnpService = makeUpnpServer();
-		upnpService.getRegistry().addDevice(makeMediaRendererDevice(hostName, usi, holder));
+		upnpService.getRegistry().addDevice(makeMediaRendererDevice(friendlyName, usi, holder));
 		upnpService.getControlPoint().search();// In case this helps announce our presence.  Unproven.
 	}
 
@@ -199,9 +201,9 @@ public class Main {
 		}
 	}
 
-	private static LocalDevice makeMediaRendererDevice (final String hostName, final UDN usi, final AtomicReference<ChromeCast> holder) throws IOException, ValidationException {
+	private static LocalDevice makeMediaRendererDevice (final String friendlyName, final UDN usi, final AtomicReference<ChromeCast> holder) throws IOException, ValidationException {
 		final DeviceType type = new UDADeviceType("MediaRenderer", 1);
-		final DeviceDetails details = new DeviceDetails(C.METADATA_MODEL_NAME + " (" + hostName + ")", new ManufacturerDetails(C.METADATA_MANUFACTURER), new ModelDetails(C.METADATA_MODEL_NAME, C.METADATA_MODEL_DESCRIPTION, C.METADATA_MODEL_NUMBER));
+		final DeviceDetails details = new DeviceDetails(friendlyName, new ManufacturerDetails(C.METADATA_MANUFACTURER), new ModelDetails(C.METADATA_MODEL_NAME, C.METADATA_MODEL_DESCRIPTION, C.METADATA_MODEL_NUMBER));
 		final Icon icon = createDeviceIcon();
 
 		// http://4thline.org/projects/cling/support/manual/cling-support-manual.html
