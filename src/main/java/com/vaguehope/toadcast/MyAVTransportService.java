@@ -54,6 +54,7 @@ public class MyAVTransportService extends AbstractAVTransportService {
 	private ChromeCast getChromeCast () throws AVTransportException {
 		final ChromeCast c = this.chromecastHolder.get();
 		if (c == null) throw new AVTransportException(ErrorCode.ACTION_FAILED, "ChromeCast not found.");
+		if (!c.isConnected())  throw new AVTransportException(ErrorCode.ACTION_FAILED, "ChromeCast not connected.");
 		return c;
 	}
 
