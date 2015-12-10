@@ -13,6 +13,8 @@
 	</appender>
 
 	<logger name="com.vaguehope.toadcast" level="INFO" />
+	<logger name="org.fourthline.cling.binding.xml.ServiceDescriptorBinder" level="ERROR" />
+	<logger name="org.fourthline.cling.protocol.RetrieveRemoteDescriptors" level="ERROR" />
 
 	<root level="info">
 		<appender-ref ref="default" />
