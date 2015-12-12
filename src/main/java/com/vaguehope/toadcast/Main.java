@@ -9,7 +9,6 @@ import java.security.GeneralSecurityException;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -106,11 +105,13 @@ public class Main {
 
 	private static void start (final Args args) throws Exception {// NOSONAR
 		final AtomicReference<ChromeCast> holder = new AtomicReference<ChromeCast>();
-		startChromecastWatcher(args, holder);
-		startUpnpService(args, holder);
+		final GoalSeeker goalSeeker = new GoalSeeker(holder);
+		Executors.newScheduledThreadPool(1).scheduleWithFixedDelay(goalSeeker, 1, 1, TimeUnit.SECONDS);
+		startChromecastDiscovery(args, holder);
+		startUpnpService(args, holder, goalSeeker);
 	}
 
-	private static void startChromecastWatcher (final Args args, final AtomicReference<ChromeCast> holder) throws Exception {// NOSONAR
+	private static void startChromecastDiscovery (final Args args, final AtomicReference<ChromeCast> holder) throws Exception {// NOSONAR
 		ChromeCasts.registerListener(new ChromeCastsListener() {
 			@Override
 			public void newChromeCastDiscovered (final ChromeCast chromecast) {
@@ -119,8 +120,8 @@ public class Main {
 					if (holder.compareAndSet(null, chromecast)) {
 						try {
 							chromecast.connect();
-							CastUtils.ensureReady(chromecast);
-							LOG.info("found: {}", name);
+							LOG.info("ChromeCast found: {}", name);
+							ChromeCasts.stopDiscovery();
 						}
 						catch (final IOException | GeneralSecurityException e) {
 							holder.compareAndSet(chromecast, null);
@@ -132,25 +133,14 @@ public class Main {
 
 			@Override
 			public void chromeCastRemoved (final ChromeCast chromecast) {
-				final ChromeCast h = holder.get();
-				if (h != null && Objects.equals(h.getAddress(), chromecast.getAddress())) {
-					if (holder.compareAndSet(h, null)) {
-						try {
-							h.disconnect();
-							LOG.info("lost: {}", h.getName());
-						}
-						catch (final IOException e) {
-							LOG.warn("Error while disconnecting: ", e);
-						}
-					}
-				}
+				LOG.info("mDNS unfound: {} (probably not a problem)", chromecast.getName());
 			}
 		});
 		ChromeCasts.startDiscovery();
 		LOG.info("Watching for ChromeCast {} ...", args.getChromecast());
 	}
 
-	private static void startUpnpService (final Args args, final AtomicReference<ChromeCast> holder) throws IOException, UnknownHostException, ValidationException {
+	private static void startUpnpService (final Args args, final AtomicReference<ChromeCast> holder, final GoalSeeker goalSeeker) throws IOException, UnknownHostException, ValidationException {
 		final String hostName = InetAddress.getLocalHost().getHostName();
 		LOG.info("hostName: {}", hostName);
 
@@ -160,7 +150,7 @@ public class Main {
 		LOG.info("uniqueSystemIdentifier: {}", usi);
 
 		final UpnpService upnpService = makeUpnpServer();
-		upnpService.getRegistry().addDevice(makeMediaRendererDevice(friendlyName, usi, holder));
+		upnpService.getRegistry().addDevice(makeMediaRendererDevice(friendlyName, usi, holder, goalSeeker));
 		upnpService.getControlPoint().search();// In case this helps announce our presence.  Unproven.
 	}
 
@@ -201,7 +191,7 @@ public class Main {
 		}
 	}
 
-	private static LocalDevice makeMediaRendererDevice (final String friendlyName, final UDN usi, final AtomicReference<ChromeCast> holder) throws IOException, ValidationException {
+	private static LocalDevice makeMediaRendererDevice (final String friendlyName, final UDN usi, final AtomicReference<ChromeCast> holder, final GoalSeeker goalSeeker) throws IOException, ValidationException {
 		final DeviceType type = new UDADeviceType("MediaRenderer", 1);
 		final DeviceDetails details = new DeviceDetails(friendlyName, new ManufacturerDetails(C.METADATA_MANUFACTURER), new ModelDetails(C.METADATA_MODEL_NAME, C.METADATA_MODEL_DESCRIPTION, C.METADATA_MODEL_NUMBER));
 		final Icon icon = createDeviceIcon();
@@ -215,7 +205,7 @@ public class Main {
 
 		final LocalService<MyAVTransportService> avtSrv = binder.read(MyAVTransportService.class);
 		final LastChange avTransportLastChange = new LastChange(new AVTransportLastChangeParser());
-		final MyAVTransportService avTransportService = new MyAVTransportService(avTransportLastChange, holder);
+		final MyAVTransportService avTransportService = new MyAVTransportService(avTransportLastChange, holder, goalSeeker);
 		avtSrv.setManager(new LastChangeAwareServiceManager<MyAVTransportService>(avtSrv, new AVTransportLastChangeParser()) {
 			@Override
 			protected MyAVTransportService createServiceInstance () throws Exception {
