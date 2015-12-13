@@ -9,7 +9,6 @@ import java.util.Set;
 import org.fourthline.cling.model.ModelUtil;
 import org.fourthline.cling.model.types.ErrorCode;
 import org.fourthline.cling.model.types.UnsignedIntegerFourBytes;
-import org.fourthline.cling.support.avtransport.AVTransportErrorCode;
 import org.fourthline.cling.support.avtransport.AVTransportException;
 import org.fourthline.cling.support.avtransport.AbstractAVTransportService;
 import org.fourthline.cling.support.contentdirectory.DIDLParser;
@@ -63,16 +62,16 @@ public class MyAVTransportService extends AbstractAVTransportService {
 			throw new AVTransportException(ErrorCode.INVALID_ARGS, "CurrentURI can not be null or malformed");
 		}
 
-		if ("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme())) {
-			try {
-				HttpFetch.validate(URIUtil.toURL(uri));
-			}
-			catch (final IOException ex) {
-				throw new AVTransportException(AVTransportErrorCode.RESOURCE_NOT_FOUND, ex.getMessage());
-			}
-		}
-		else {
+		if (!"http".equalsIgnoreCase(uri.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme())) {
 			throw new AVTransportException(ErrorCode.INVALID_ARGS, "Only HTTP and HTTPS: resource identifiers are supported, not '" + uri.getScheme() + "'.");
+		}
+
+		// TODO does this really provide much value?
+		try {
+			HttpFetch.validate(URIUtil.toURL(uri));
+		}
+		catch (final IOException e) {
+			LOG.warn("URI validation failed: {}", e.toString());
 		}
 
 		final Item item;
