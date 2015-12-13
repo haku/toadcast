@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.fourthline.cling.UpnpService;
 import org.fourthline.cling.UpnpServiceImpl;
 import org.fourthline.cling.binding.annotations.AnnotationLocalServiceBinder;
+import org.fourthline.cling.model.Command;
 import org.fourthline.cling.model.DefaultServiceManager;
 import org.fourthline.cling.model.ValidationException;
 import org.fourthline.cling.model.meta.DeviceDetails;
@@ -211,6 +212,17 @@ public class Main {
 			protected MyAVTransportService createServiceInstance () throws Exception {
 				return avTransportService;
 			}
+
+			@Override
+			public void execute (final Command<MyAVTransportService> cmd) throws Exception {
+				try {
+					super.execute(cmd);
+				}
+				catch (final Exception e) {
+					LOG.warn("Action failed: " + cmd, e);
+					throw e;
+				}
+			}
 		});
 
 		final LocalService<MyAudioRenderingControl> rendCtlSrv = binder.read(MyAudioRenderingControl.class);
@@ -220,6 +232,17 @@ public class Main {
 			@Override
 			protected MyAudioRenderingControl createServiceInstance () throws Exception {
 				return audioRenderingControl;
+			}
+
+			@Override
+			public void execute (final Command<MyAudioRenderingControl> cmd) throws Exception {
+				try {
+					super.execute(cmd);
+				}
+				catch (final Exception e) {
+					LOG.warn("Action failed: " + cmd, e);
+					throw e;
+				}
 			}
 		});
 
