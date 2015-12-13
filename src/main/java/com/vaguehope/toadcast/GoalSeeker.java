@@ -108,6 +108,8 @@ public class GoalSeeker implements Runnable {
 			return;// Target state reached.  Stop.
 		}
 
+		// TODO FIXME what if current track has finished playing?
+
 		// Got right URI?
 		if (!Objects.equals(cUrl, tUri)) {
 			c.load(tState.getTitle(), tState.getRelativeArtUri(), tState.getMediaInfo().getCurrentURI(), tState.getContentType());
