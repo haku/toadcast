@@ -95,12 +95,15 @@ public class GoalSeeker implements Runnable {
 		final PlayerState cState = cStatus != null ? cStatus.playerState : null;
 
 		// Should stop?
-		if ((tState == null || tUri == null) && cState != null) {
-			switch (cState) {
-				case BUFFERING:
-				case PLAYING:
-					c.pause();
-				default:
+		if (tState == null || tUri == null) {
+			if (cState != null) {
+				switch (cState) {
+					case BUFFERING:
+					case PLAYING:
+						c.pause();
+						LOG.info("Stopped.");
+					default:
+				}
 			}
 			return;// Target state reached.  Stop.
 		}
@@ -108,14 +111,24 @@ public class GoalSeeker implements Runnable {
 		// Got right URI?
 		if (!Objects.equals(cUrl, tUri)) {
 			c.load(tState.getTitle(), tState.getRelativeArtUri(), tState.getMediaInfo().getCurrentURI(), tState.getContentType());
+			LOG.info("Loaded {}.", tState.getMediaInfo().getCurrentURI());
+			return;
 		}
 
 		// Should resume / pause?
 		if (tPaused) {
-			if (cState == PlayerState.PLAYING) c.pause();
+			if (cState == PlayerState.PLAYING) {
+				c.pause();
+				LOG.info("Paused.");
+				return;
+			}
 		}
 		else {
-			if (cState == PlayerState.PAUSED) c.play();
+			if (cState == PlayerState.PAUSED) {
+				c.play();
+				LOG.info("Resumed.");
+				return;
+			}
 		}
 	}
 
