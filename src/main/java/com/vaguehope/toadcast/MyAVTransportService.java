@@ -1,6 +1,8 @@
 package com.vaguehope.toadcast;
 
+import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.EnumSet;
 import java.util.Set;
 
@@ -57,7 +59,7 @@ public class MyAVTransportService extends AbstractAVTransportService {
 		try {
 			uri = new URI(currentURI);
 		}
-		catch (final Exception ex) {
+		catch (final URISyntaxException ex) {
 			throw new AVTransportException(ErrorCode.INVALID_ARGS, "CurrentURI can not be null or malformed");
 		}
 
@@ -65,7 +67,7 @@ public class MyAVTransportService extends AbstractAVTransportService {
 			try {
 				HttpFetch.validate(URIUtil.toURL(uri));
 			}
-			catch (final Exception ex) {
+			catch (final IOException ex) {
 				throw new AVTransportException(AVTransportErrorCode.RESOURCE_NOT_FOUND, ex.getMessage());
 			}
 		}
