@@ -108,7 +108,7 @@ public class Main {
 		final GoalSeeker goalSeeker = new GoalSeeker(holder);
 		Executors.newScheduledThreadPool(1).scheduleWithFixedDelay(goalSeeker, 1, 1, TimeUnit.SECONDS);
 		startChromecastDiscovery(args, holder);
-		startUpnpService(args, holder, goalSeeker);
+		startUpnpService(args, goalSeeker);
 	}
 
 	private static void startChromecastDiscovery (final Args args, final AtomicReference<ChromeCast> holder) throws Exception {// NOSONAR
@@ -140,7 +140,7 @@ public class Main {
 		LOG.info("Watching for ChromeCast {} ...", args.getChromecast());
 	}
 
-	private static void startUpnpService (final Args args, final AtomicReference<ChromeCast> holder, final GoalSeeker goalSeeker) throws IOException, UnknownHostException, ValidationException {
+	private static void startUpnpService (final Args args, final GoalSeeker goalSeeker) throws IOException, UnknownHostException, ValidationException {
 		final String hostName = InetAddress.getLocalHost().getHostName();
 		LOG.info("hostName: {}", hostName);
 
@@ -150,7 +150,7 @@ public class Main {
 		LOG.info("uniqueSystemIdentifier: {}", usi);
 
 		final UpnpService upnpService = makeUpnpServer();
-		upnpService.getRegistry().addDevice(makeMediaRendererDevice(friendlyName, usi, holder, goalSeeker));
+		upnpService.getRegistry().addDevice(makeMediaRendererDevice(friendlyName, usi, goalSeeker));
 		upnpService.getControlPoint().search();// In case this helps announce our presence.  Unproven.
 	}
 
@@ -191,7 +191,7 @@ public class Main {
 		}
 	}
 
-	private static LocalDevice makeMediaRendererDevice (final String friendlyName, final UDN usi, final AtomicReference<ChromeCast> holder, final GoalSeeker goalSeeker) throws IOException, ValidationException {
+	private static LocalDevice makeMediaRendererDevice (final String friendlyName, final UDN usi, final GoalSeeker goalSeeker) throws IOException, ValidationException {
 		final DeviceType type = new UDADeviceType("MediaRenderer", 1);
 		final DeviceDetails details = new DeviceDetails(friendlyName, new ManufacturerDetails(C.METADATA_MANUFACTURER), new ModelDetails(C.METADATA_MODEL_NAME, C.METADATA_MODEL_DESCRIPTION, C.METADATA_MODEL_NUMBER));
 		final Icon icon = createDeviceIcon();
@@ -205,7 +205,7 @@ public class Main {
 
 		final LocalService<MyAVTransportService> avtSrv = binder.read(MyAVTransportService.class);
 		final LastChange avTransportLastChange = new LastChange(new AVTransportLastChangeParser());
-		final MyAVTransportService avTransportService = new MyAVTransportService(avTransportLastChange, holder, goalSeeker);
+		final MyAVTransportService avTransportService = new MyAVTransportService(avTransportLastChange, goalSeeker);
 		avtSrv.setManager(new LastChangeAwareServiceManager<MyAVTransportService>(avtSrv, new AVTransportLastChangeParser()) {
 			@Override
 			protected MyAVTransportService createServiceInstance () throws Exception {

@@ -1,11 +1,8 @@
 package com.vaguehope.toadcast;
 
-import java.io.IOException;
 import java.net.URI;
-import java.util.List;
-import java.util.Objects;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.EnumSet;
+import java.util.Set;
 
 import org.fourthline.cling.model.ModelUtil;
 import org.fourthline.cling.model.types.ErrorCode;
@@ -16,12 +13,10 @@ import org.fourthline.cling.support.avtransport.AbstractAVTransportService;
 import org.fourthline.cling.support.contentdirectory.DIDLParser;
 import org.fourthline.cling.support.lastchange.LastChange;
 import org.fourthline.cling.support.model.DIDLContent;
-import org.fourthline.cling.support.model.DIDLObject;
 import org.fourthline.cling.support.model.DeviceCapabilities;
 import org.fourthline.cling.support.model.MediaInfo;
 import org.fourthline.cling.support.model.PlayMode;
 import org.fourthline.cling.support.model.PositionInfo;
-import org.fourthline.cling.support.model.Res;
 import org.fourthline.cling.support.model.StorageMedium;
 import org.fourthline.cling.support.model.TransportAction;
 import org.fourthline.cling.support.model.TransportInfo;
@@ -33,8 +28,6 @@ import org.seamless.util.URIUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import su.litvak.chromecast.api.v2.ChromeCast;
-import su.litvak.chromecast.api.v2.Media;
 import su.litvak.chromecast.api.v2.MediaStatus;
 import su.litvak.chromecast.api.v2.MediaStatus.PlayerState;
 
@@ -42,23 +35,13 @@ public class MyAVTransportService extends AbstractAVTransportService {
 
 	private static final Logger LOG = LoggerFactory.getLogger(MyAVTransportService.class);
 
-	private final AtomicReference<ChromeCast> chromecastHolder;
 	private final GoalSeeker goalSeeker;
 
-	private volatile MediaInfo currentMediaInfo = new MediaInfo();
-	private volatile Item currentMediaItem;
+	private volatile PlayingState stagedPlayingState;
 
-	public MyAVTransportService (final LastChange lastChange, final AtomicReference<ChromeCast> chromecastHolder, final GoalSeeker goalSeeker) {
+	public MyAVTransportService (final LastChange lastChange, final GoalSeeker goalSeeker) {
 		super(lastChange);
-		this.chromecastHolder = chromecastHolder;
 		this.goalSeeker = goalSeeker;
-	}
-
-	private ChromeCast getChromeCast () throws AVTransportException {
-		final ChromeCast c = this.chromecastHolder.get();
-		if (c == null) throw new AVTransportException(ErrorCode.ACTION_FAILED, "ChromeCast not found.");
-		if (!c.isConnected()) throw new AVTransportException(ErrorCode.ACTION_FAILED, "ChromeCast not connected.");
-		return c;
 	}
 
 	@Override
@@ -68,8 +51,7 @@ public class MyAVTransportService extends AbstractAVTransportService {
 
 	@Override
 	public void setAVTransportURI (final UnsignedIntegerFourBytes instanceId, final String currentURI, final String currentURIMetaData) throws AVTransportException {
-		LOG.info("setAVTransportURI({}, {}, [{}])", instanceId, currentURI,
-				currentURIMetaData != null ? currentURI.length() : null);
+		LOG.info("setAVTransportURI({}, {}, [{}])", instanceId, currentURI, currentURIMetaData != null ? currentURI.length() : null);
 
 		final URI uri;
 		try {
@@ -112,8 +94,7 @@ public class MyAVTransportService extends AbstractAVTransportService {
 			item = null;
 		}
 
-		this.currentMediaInfo = new MediaInfo(uri.toString(), currentURIMetaData);
-		this.currentMediaItem = item;
+		this.stagedPlayingState = new PlayingState(new MediaInfo(currentURI, currentURIMetaData), item);
 	}
 
 	@Override
@@ -123,12 +104,18 @@ public class MyAVTransportService extends AbstractAVTransportService {
 
 	@Override
 	public MediaInfo getMediaInfo (final UnsignedIntegerFourBytes instanceId) throws AVTransportException {
-		return this.currentMediaInfo;
+		final PlayingState staged = this.stagedPlayingState;
+		if (staged != null) return staged.getMediaInfo();
+
+		final PlayingState target = this.goalSeeker.getTargetPlayingState();
+		if (target != null) return target.getMediaInfo();
+
+		return new MediaInfo();
 	}
 
 	@Override
 	public TransportInfo getTransportInfo (final UnsignedIntegerFourBytes instanceId) throws AVTransportException {
-		final MediaStatus mediaStatus = this.goalSeeker.getMediaStatus().get(); // TODO check freshness?
+		final MediaStatus mediaStatus = this.goalSeeker.getCurrentMediaStatus().get();// TODO check freshness?
 
 		final TransportState transportState;
 		if (mediaStatus != null) {
@@ -156,7 +143,26 @@ public class MyAVTransportService extends AbstractAVTransportService {
 
 	@Override
 	public PositionInfo getPositionInfo (final UnsignedIntegerFourBytes instanceId) throws AVTransportException {
-		final MediaStatus mediaStatus = this.goalSeeker.getMediaStatus().get(); // TODO check freshness?
+		final PlayingState staged = this.stagedPlayingState;
+		if (staged != null) {
+			return mediaStatusToPositionInfo(staged.getMediaInfo());
+		}
+
+		final PlayingState target = this.goalSeeker.getTargetPlayingState();
+		if (target != null) {
+			final MediaStatus mediaStatus = this.goalSeeker.getCurrentMediaStatus().get();// TODO check freshness?
+			return mediaStatusToPositionInfo(mediaStatus, target.getMediaInfo());
+		}
+
+		return new PositionInfo();
+	}
+
+	private static PositionInfo mediaStatusToPositionInfo (final MediaInfo mediaInfo) {
+		return mediaStatusToPositionInfo(null, mediaInfo);
+	}
+
+	private static PositionInfo mediaStatusToPositionInfo (final MediaStatus mediaStatus, final MediaInfo mediaInfo) {
+		if (mediaInfo == null) throw new IllegalArgumentException("mediaInfo must not be null.");
 
 		String duration = "00:00:00";
 		String position = "00:00:00";
@@ -169,10 +175,10 @@ public class MyAVTransportService extends AbstractAVTransportService {
 			position = ModelUtil.toTimeString((long) mediaStatus.currentTime);
 		}
 
-		String trackUri = this.currentMediaInfo.getCurrentURI();
+		String trackUri = mediaInfo.getCurrentURI();
 		if (trackUri == null) trackUri = "";
 
-		String trackMetaData = this.currentMediaInfo.getCurrentURIMetaData();
+		String trackMetaData = mediaInfo.getCurrentURIMetaData();
 		if (trackMetaData == null) trackMetaData = "NOT_IMPLEMENTED";
 
 		return new PositionInfo(1, duration, trackMetaData, trackUri, position, position, Integer.MAX_VALUE, Integer.MAX_VALUE);
@@ -189,96 +195,58 @@ public class MyAVTransportService extends AbstractAVTransportService {
 	}
 
 	@Override
-	public void stop (final UnsignedIntegerFourBytes instanceId) throws AVTransportException {
-		LOG.info("stop({})", instanceId);
-		try {
-			this.currentMediaInfo = new MediaInfo();
+	protected TransportAction[] getCurrentTransportActions (final UnsignedIntegerFourBytes instanceId) throws Exception {
+		final MediaStatus cStatus = this.goalSeeker.getCurrentMediaStatus().get(); // TODO check freshness?
+		final PlayerState cState = cStatus != null ? cStatus.playerState : null;
 
-			final MediaStatus mediaStatus = this.goalSeeker.getMediaStatus().get(); // TODO check freshness?
-			if (mediaStatus != null) {
-				switch (mediaStatus.playerState) {
-					case BUFFERING:
-					case PLAYING:
-						getChromeCast().pause();
-					default:
-				}
+		final Set<TransportAction> actions = EnumSet.noneOf(TransportAction.class);
+
+		if (this.stagedPlayingState != null) {
+			actions.add(TransportAction.Play);
+		}
+
+		if (cState != null) {
+			switch (cState) {
+				case PLAYING:
+					actions.add(TransportAction.Pause);
+					actions.add(TransportAction.Stop);
+					break;
+				case PAUSED:
+					actions.add(TransportAction.Play);
+					actions.add(TransportAction.Stop);
+					break;
+				case BUFFERING:
+					actions.add(TransportAction.Stop);
+				default:
 			}
 		}
-		catch (final IOException e) {
-			throw new AVTransportException(ErrorCode.ACTION_FAILED.getCode(), e.toString(), e);
-		}
+
+		return actions.toArray(new TransportAction[actions.size()]);
+	}
+
+	@Override
+	public void stop (final UnsignedIntegerFourBytes instanceId) throws AVTransportException {
+		LOG.info("stop({})", instanceId);
+		this.goalSeeker.gotoStopped();
 	}
 
 	@Override
 	public void play (final UnsignedIntegerFourBytes instanceId, final String speed) throws AVTransportException {
 		LOG.info("play({})", instanceId);
 
-		// FIXME these 2 lines not atomic / thread safe.
-		final MediaInfo mediaInfo = this.currentMediaInfo;
-		final Item item = this.currentMediaItem;
-
-		if (mediaInfo == null || mediaInfo.getCurrentURI() == null) throw new AVTransportException(ErrorCode.ACTION_FAILED, "currentMediaInfo not set.");
-
-		final Timestamped<MediaStatus> mediaStatusTs = this.goalSeeker.getMediaStatus(); // TODO check freshness?
-		if (mediaStatusTs.isMissingOrOlderThan(10, TimeUnit.SECONDS)) throw new AVTransportException(ErrorCode.ACTION_FAILED, "ChromeCast state not known.");
-		final MediaStatus mediaStatus = mediaStatusTs.get();
-
-		try {
-			final Media media = mediaStatus != null ? mediaStatus.media : null;
-			final String mediaUrl = media != null ? media.url : null;
-			final PlayerState playerState = mediaStatus != null ? mediaStatus.playerState : null;
-
-			// TODO better way to tell different between load and resume?
-			if (Objects.equals(mediaUrl, mediaInfo.getCurrentURI()) && playerState == PlayerState.PAUSED) {
-				getChromeCast().play();
-			}
-			else {
-				String title = "Toad Cast";
-				String thumb = null;
-				String contentType = "audio/mpeg";
-				if (item != null) {
-					if (item.getTitle() != null) title = item.getTitle();
-
-					final List<URI> arts = item.getPropertyValues(DIDLObject.Property.UPNP.ALBUM_ART_URI.class);
-					if (arts != null && arts.size() > 0) {
-						final URI artUri = arts.get(0);
-						final URI mediaUri = URI.create(mediaInfo.getCurrentURI());
-						thumb = mediaUri.relativize(artUri).toString();
-					}
-
-					Res res = null;
-					if (item.getResources().size() > 1) {
-						for (final Res r : item.getResources()) {
-							if ("audio".equalsIgnoreCase(r.getProtocolInfo().getContentFormatMimeType().getType())) {
-								res = r;
-							}
-						}
-					}
-					if (res == null && item.getResources().size() > 0) {
-						res = item.getResources().get(0);
-					}
-					if (res != null) {
-						contentType = res.getProtocolInfo().getContentFormatMimeType().toStringNoParameters();
-					}
-				}
-				getChromeCast().load(title, thumb, mediaInfo.getCurrentURI(), contentType);
-			}
+		if (this.stagedPlayingState != null) {
+			this.goalSeeker.gotoPlaying(this.stagedPlayingState);
+			this.stagedPlayingState = null;// Important that this does not get nulled until after goalSeeker has it.
 		}
-		catch (final IOException e) {
-			LOG.error("Failed to play: {}", e.toString());
-			throw new AVTransportException(ErrorCode.ACTION_FAILED.getCode(), e.toString(), e);
+		else {
+			this.goalSeeker.gotoResumed();
 		}
 	}
 
 	@Override
 	public void pause (final UnsignedIntegerFourBytes instanceId) throws AVTransportException {
 		LOG.info("pause({})", instanceId);
-		try {
-			getChromeCast().pause();
-		}
-		catch (final IOException e) {
-			throw new AVTransportException(ErrorCode.ACTION_FAILED.getCode(), e.toString(), e);
-		}
+		this.goalSeeker.gotoPaused();
 	}
 
 	@Override
@@ -309,11 +277,6 @@ public class MyAVTransportService extends AbstractAVTransportService {
 	@Override
 	public void setRecordQualityMode (final UnsignedIntegerFourBytes instanceId, final String newRecordQualityMode) throws AVTransportException {
 		LOG.info("TODO setRecordQualityMode({})", instanceId, newRecordQualityMode);
-	}
-
-	@Override
-	protected TransportAction[] getCurrentTransportActions (final UnsignedIntegerFourBytes instanceId) throws Exception {
-		return new TransportAction[] { TransportAction.Play };
 	}
 
 }
