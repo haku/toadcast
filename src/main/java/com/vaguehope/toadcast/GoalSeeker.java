@@ -95,7 +95,7 @@ public class GoalSeeker implements Runnable {
 		final PlayerState cState = cStatus != null ? cStatus.playerState : null;
 
 		// Should stop?
-		if (tState == null || tUri == null) {
+		if ((tState == null || tUri == null) && cState != null) {
 			switch (cState) {
 				case BUFFERING:
 				case PLAYING:
