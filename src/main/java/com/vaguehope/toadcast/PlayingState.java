@@ -20,7 +20,7 @@ public class PlayingState {
 
 	public PlayingState (final MediaInfo mediaInfo, final Item item) {
 		if (mediaInfo == null) throw new IllegalArgumentException("mediaInfo must not be null.");
-		if (mediaInfo.getCurrentURI() != null) throw new IllegalArgumentException("mediaInfo.currentUri must not be null.");
+		if (mediaInfo.getCurrentURI() == null) throw new IllegalArgumentException("mediaInfo.currentUri must not be null.");
 		this.mediaInfo = mediaInfo;
 
 		if (item != null) {
