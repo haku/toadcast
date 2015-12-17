@@ -69,8 +69,8 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 		// TODO If persistent connecting issues, forget and restart discovery.
 
 		readyChromeCast(c);
-		readPushedStatus();
 		final MediaStatus cStatus = readCurrent(c);
+		readPushedStatus(); // Specifically after readCurrent().
 		seekGoal(c, cStatus);
 	}
 
