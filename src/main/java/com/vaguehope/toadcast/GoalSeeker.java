@@ -1,22 +1,31 @@
 package com.vaguehope.toadcast;
 
 import java.io.IOException;
+import java.util.EnumSet;
 import java.util.Objects;
+import java.util.Queue;
+import java.util.Set;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.lang3.StringUtils;
+import org.codehaus.jackson.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import su.litvak.chromecast.api.v2.Application;
 import su.litvak.chromecast.api.v2.ChromeCast;
+import su.litvak.chromecast.api.v2.ChromeCastEventListener;
 import su.litvak.chromecast.api.v2.Media;
 import su.litvak.chromecast.api.v2.MediaStatus;
+import su.litvak.chromecast.api.v2.MediaStatus.IdleReason;
 import su.litvak.chromecast.api.v2.MediaStatus.PlayerState;
 import su.litvak.chromecast.api.v2.Status;
 
-public class GoalSeeker implements Runnable {
+public class GoalSeeker implements Runnable, ChromeCastEventListener {
+
+	private static final Set<IdleReason> GOAL_REACHED_IF_IDLE_REASONS = EnumSet.of(IdleReason.CANCELLED, IdleReason.INTERRUPTED, IdleReason.FINISHED, IdleReason.ERROR, IdleReason.COMPLETED);
 
 	private static final String CHROME_CAST_DEFAULT_APP_ID = "CC1AD845";
 	private static final Logger LOG = LoggerFactory.getLogger(GoalSeeker.class);
@@ -25,6 +34,8 @@ public class GoalSeeker implements Runnable {
 
 	// Where we are.
 	private volatile Timestamped<MediaStatus> currentMediaStatus;
+	private volatile long ourMediaSessionId;
+	private final Queue<MediaStatus> pushedStatus = new LinkedBlockingQueue<MediaStatus>();
 
 	// Where we want to be.
 	private volatile PlayingState targetPlayingState;
@@ -32,7 +43,7 @@ public class GoalSeeker implements Runnable {
 
 	public GoalSeeker (final AtomicReference<ChromeCast> chromecastHolder) {
 		this.chromecastHolder = chromecastHolder;
-		this.currentMediaStatus = new Timestamped<MediaStatus>(null);
+		setCurrentMediaStatus(null);
 		this.targetPlayingState = null;
 		this.targetPaused = false;
 	}
@@ -58,11 +69,12 @@ public class GoalSeeker implements Runnable {
 		// TODO If persistent connecting issues, forget and restart discovery.
 
 		readyChromeCast(c);
+		readPushedStatus();
 		final MediaStatus cStatus = readCurrent(c);
 		seekGoal(c, cStatus);
 	}
 
-	private void readyChromeCast (final ChromeCast c) throws IOException {
+	private static void readyChromeCast (final ChromeCast c) throws IOException {
 		final Status status = c.getStatus();
 		final Application runningApp = status != null ? status.getRunningApp() : null;
 		final String runningAppId = runningApp != null ? runningApp.id : null;
@@ -77,9 +89,22 @@ public class GoalSeeker implements Runnable {
 		}
 	}
 
+	/**
+	 * NOTE: Pushed MEDIA_STATUS objects are incomplete and not suitable for general goal seeking.
+	 */
+	private void readPushedStatus () {
+		MediaStatus status;
+		while ((status = this.pushedStatus.poll()) != null) {
+			if (status.mediaSessionId == this.ourMediaSessionId && GOAL_REACHED_IF_IDLE_REASONS.contains(status.idleReason)) {
+				LOG.info("Session {} goal reached by idle reason: {}", this.ourMediaSessionId, status.idleReason);
+				this.targetPlayingState = null;
+			}
+		}
+	}
+
 	private MediaStatus readCurrent (final ChromeCast c) throws IOException {
 		final MediaStatus cStatus = c.getMediaStatus();
-		this.currentMediaStatus = new Timestamped<>(cStatus);
+		setCurrentMediaStatus(cStatus);
 		return cStatus;
 	}
 
@@ -108,12 +133,17 @@ public class GoalSeeker implements Runnable {
 			return;// Target state reached.  Stop.
 		}
 
-		// TODO FIXME what if current track has finished playing?
-
 		// Got right URI?
 		if (!Objects.equals(cUrl, tUri)) {
-			c.load(tState.getTitle(), tState.getRelativeArtUri(), tState.getMediaInfo().getCurrentURI(), tState.getContentType());
-			LOG.info("Loaded {}.", tState.getMediaInfo().getCurrentURI());
+			final MediaStatus afterLoad = c.load(tState.getTitle(), tState.getRelativeArtUri(), tState.getMediaInfo().getCurrentURI(), tState.getContentType());
+			if (afterLoad != null) {
+				this.ourMediaSessionId = afterLoad.mediaSessionId;
+				setCurrentMediaStatus(afterLoad);
+			}
+			else {
+				this.ourMediaSessionId = -2;
+			}
+			LOG.info("Loaded {} (session={}).", tState.getMediaInfo().getCurrentURI(), this.ourMediaSessionId);
 			return;
 		}
 
@@ -132,6 +162,14 @@ public class GoalSeeker implements Runnable {
 				return;
 			}
 		}
+	}
+
+	/**
+	 * @param newStatus
+	 *            May be null.
+	 */
+	private void setCurrentMediaStatus (final MediaStatus newStatus) {
+		this.currentMediaStatus = new Timestamped<>(newStatus);
 	}
 
 	/**
@@ -160,6 +198,23 @@ public class GoalSeeker implements Runnable {
 
 	public void gotoStopped () {
 		this.targetPlayingState = null;
+	}
+
+	@Override
+	public void onSpontaneousMediaStatus (final MediaStatus mediaStatus) {
+		LOG.info("Spontaneous media status: mediaSessionId={} playerState={} idleReason={}",
+				mediaStatus.mediaSessionId, mediaStatus.playerState, mediaStatus.idleReason);
+		this.pushedStatus.add(mediaStatus);
+	}
+
+	@Override
+	public void onSpontaneousStatus (final Status status) {
+		LOG.debug("Spontaneous status: {}", status);
+	}
+
+	@Override
+	public void onUnidentifiedSpontaneousEvent (final JsonNode event) {
+		LOG.debug("Spontaneous event: {}", event);
 	}
 
 }

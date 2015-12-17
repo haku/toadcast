@@ -47,6 +47,7 @@ import org.slf4j.LoggerFactory;
 import com.sun.akuma.Daemon;
 
 import su.litvak.chromecast.api.v2.ChromeCast;
+import su.litvak.chromecast.api.v2.ChromeCastEventListener;
 import su.litvak.chromecast.api.v2.ChromeCasts;
 import su.litvak.chromecast.api.v2.ChromeCastsListener;
 
@@ -108,11 +109,11 @@ public class Main {
 		final AtomicReference<ChromeCast> holder = new AtomicReference<ChromeCast>();
 		final GoalSeeker goalSeeker = new GoalSeeker(holder);
 		Executors.newScheduledThreadPool(1).scheduleWithFixedDelay(goalSeeker, 1, 1, TimeUnit.SECONDS);
-		startChromecastDiscovery(args, holder);
+		startChromecastDiscovery(args, holder, goalSeeker);
 		startUpnpService(args, goalSeeker);
 	}
 
-	private static void startChromecastDiscovery (final Args args, final AtomicReference<ChromeCast> holder) throws Exception {// NOSONAR
+	private static void startChromecastDiscovery (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastEventListener eventListener) throws Exception {// NOSONAR
 		ChromeCasts.registerListener(new ChromeCastsListener() {
 			@Override
 			public void newChromeCastDiscovered (final ChromeCast chromecast) {
@@ -121,6 +122,7 @@ public class Main {
 					if (holder.compareAndSet(null, chromecast)) {
 						try {
 							chromecast.connect();
+							chromecast.registerListener(eventListener);
 							LOG.info("ChromeCast found: {}", name);
 							ChromeCasts.stopDiscovery();
 						}
