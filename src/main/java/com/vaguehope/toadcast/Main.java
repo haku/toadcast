@@ -114,6 +114,21 @@ public class Main {
 	}
 
 	private static void startChromecastDiscovery (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastEventListener eventListener) throws Exception {// NOSONAR
+		Runtime.getRuntime().addShutdownHook(new Thread() {
+			@Override
+			public void run () {
+				final ChromeCast c = holder.getAndSet(null);
+				if (c != null) {
+					try {
+						c.stopApp();
+						c.disconnect();
+					}
+					catch (final IOException e) {
+						LOG.warn("Failed to disconnect ChromeCast.", e);
+					}
+				}
+			}
+		});
 		ChromeCasts.registerListener(new ChromeCastsListener() {
 			@Override
 			public void newChromeCastDiscovered (final ChromeCast chromecast) {
