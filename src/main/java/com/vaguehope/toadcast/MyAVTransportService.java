@@ -4,8 +4,10 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.EnumSet;
+import java.util.Objects;
 import java.util.Set;
 
+import org.apache.commons.lang3.StringUtils;
 import org.fourthline.cling.model.ModelUtil;
 import org.fourthline.cling.model.types.ErrorCode;
 import org.fourthline.cling.model.types.UnsignedIntegerFourBytes;
@@ -29,6 +31,7 @@ import org.seamless.util.URIUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import su.litvak.chromecast.api.v2.Media;
 import su.litvak.chromecast.api.v2.MediaStatus;
 import su.litvak.chromecast.api.v2.MediaStatus.PlayerState;
 
@@ -116,23 +119,38 @@ public class MyAVTransportService extends AbstractAVTransportService {
 
 	@Override
 	public TransportInfo getTransportInfo (final UnsignedIntegerFourBytes instanceId) throws AVTransportException {
-		final MediaStatus mediaStatus = this.goalSeeker.getCurrentMediaStatus().get();// TODO check freshness?
-
 		final TransportState transportState;
-		if (mediaStatus != null) {
-			switch (mediaStatus.playerState) {
-				case BUFFERING:
-					transportState = TransportState.TRANSITIONING;
-					break;
-				case PLAYING:
-					transportState = TransportState.PLAYING;
-					break;
-				case PAUSED:
-					transportState = TransportState.PAUSED_PLAYBACK;
-					break;
-				case IDLE:
-				default:
+
+		final PlayingState tState = this.goalSeeker.getTargetPlayingState();
+		final Timestamped<MediaStatus> mediaStatusHolder = this.goalSeeker.getCurrentMediaStatus(); // TODO check freshness?
+		if (tState != null) {
+			final String tUrl = StringUtils.trimToNull(tState.getMediaInfo().getCurrentURI());
+			final MediaStatus cStatus = mediaStatusHolder.get();
+			final Media cMedia = cStatus != null ? cStatus.media : null;
+			final String cUrl = cMedia != null ? StringUtils.trimToNull(cMedia.url) : null;
+			if (Objects.equals(tUrl, cUrl)) {
+				if (cStatus != null) {
+					switch (cStatus.playerState) {
+						case BUFFERING:
+							transportState = TransportState.TRANSITIONING;
+							break;
+						case PLAYING:
+							transportState = TransportState.PLAYING;
+							break;
+						case PAUSED:
+							transportState = TransportState.PAUSED_PLAYBACK;
+							break;
+						case IDLE:
+						default:
+							transportState = TransportState.NO_MEDIA_PRESENT;
+					}
+				}
+				else {
 					transportState = TransportState.NO_MEDIA_PRESENT;
+				}
+			}
+			else {
+				transportState = TransportState.TRANSITIONING;
 			}
 		}
 		else {
