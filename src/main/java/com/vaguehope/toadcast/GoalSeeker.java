@@ -79,6 +79,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 		final Application runningApp = status != null ? status.getRunningApp() : null;
 		final String runningAppId = runningApp != null ? runningApp.id : null;
 
+		// TODO do not start app if no target track to play?
 		if (!CHROME_CAST_DEFAULT_APP_ID.equals(runningAppId)) {
 			if (runningAppId != null) {
 				LOG.info("Running app not default, stopping: {}", runningApp);
