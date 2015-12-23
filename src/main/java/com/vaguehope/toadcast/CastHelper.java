@@ -16,7 +16,7 @@ public class CastHelper {
 	private static final Logger LOG = LoggerFactory.getLogger(CastHelper.class);
 
 	public static MediaStatus readMediaStatus (final ChromeCast c) throws IOException {
-		return isRunningDefaultApp(c) ? c.getMediaStatus() : null;
+		return isRunningDefaultApp(c) ? readMediaStatusWithRetry(c) : null;
 	}
 
 	public static void readyChromeCast (final ChromeCast c) throws IOException {
@@ -42,10 +42,20 @@ public class CastHelper {
 
 	private static String readRunningAppId (final ChromeCast c) throws IOException {
 		if (!c.isConnected()) return null;
-		final Status status = c.getStatus();
+		final Status status = readStatusWithRetry(c);
 		final Application runningApp = status != null ? status.getRunningApp() : null;
 		final String runningAppId = runningApp != null ? runningApp.id : null;
 		return runningAppId;
+	}
+
+	private static Status readStatusWithRetry (final ChromeCast c) throws IOException {
+		// TODO retry loop.
+		return c.getStatus();
+	}
+
+	private static MediaStatus readMediaStatusWithRetry (final ChromeCast c) throws IOException {
+		// TODO retry loop.
+		return c.getMediaStatus();
 	}
 
 }
