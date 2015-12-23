@@ -14,7 +14,6 @@ import org.codehaus.jackson.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import su.litvak.chromecast.api.v2.Application;
 import su.litvak.chromecast.api.v2.ChromeCast;
 import su.litvak.chromecast.api.v2.ChromeCastEventListener;
 import su.litvak.chromecast.api.v2.Media;
@@ -27,7 +26,6 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 
 	private static final Set<IdleReason> GOAL_REACHED_IF_IDLE_REASONS = EnumSet.of(IdleReason.CANCELLED, IdleReason.INTERRUPTED, IdleReason.FINISHED, IdleReason.ERROR, IdleReason.COMPLETED);
 
-	private static final String CHROME_CAST_DEFAULT_APP_ID = "CC1AD845";
 	private static final Logger LOG = LoggerFactory.getLogger(GoalSeeker.class);
 
 	private final AtomicReference<ChromeCast> chromecastHolder;
@@ -68,26 +66,15 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 
 		// TODO If persistent connecting issues, forget and restart discovery.
 
-		readyChromeCast(c);
 		final MediaStatus cStatus = readCurrent(c);
 		readPushedStatus(); // Specifically after readCurrent().
 		seekGoal(c, cStatus);
 	}
 
-	private static void readyChromeCast (final ChromeCast c) throws IOException {
-		final Status status = c.getStatus();
-		final Application runningApp = status != null ? status.getRunningApp() : null;
-		final String runningAppId = runningApp != null ? runningApp.id : null;
-
-		// TODO do not start app if no target track to play?
-		if (!CHROME_CAST_DEFAULT_APP_ID.equals(runningAppId)) {
-			if (runningAppId != null) {
-				LOG.info("Running app not default, stopping: {}", runningApp);
-				c.stopApp();
-			}
-			LOG.info("Launching default app...");
-			c.launchApp(CHROME_CAST_DEFAULT_APP_ID);
-		}
+	private MediaStatus readCurrent (final ChromeCast c) throws IOException {
+		final MediaStatus cStatus = CastHelper.readMediaStatus(c);
+		setCurrentMediaStatus(cStatus);
+		return cStatus;
 	}
 
 	/**
@@ -101,12 +88,6 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 				this.targetPlayingState = null;
 			}
 		}
-	}
-
-	private MediaStatus readCurrent (final ChromeCast c) throws IOException {
-		final MediaStatus cStatus = c.getMediaStatus();
-		setCurrentMediaStatus(cStatus);
-		return cStatus;
 	}
 
 	private void seekGoal (final ChromeCast c, final MediaStatus cStatus) throws IOException {
@@ -136,6 +117,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 
 		// Got right URI?
 		if (!Objects.equals(cUrl, tUri)) {
+			CastHelper.readyChromeCast(c);
 			final MediaStatus afterLoad = c.load(tState.getTitle(), tState.getRelativeArtUri(), tState.getMediaInfo().getCurrentURI(), tState.getContentType());
 			if (afterLoad != null) {
 				this.ourMediaSessionId = afterLoad.mediaSessionId;

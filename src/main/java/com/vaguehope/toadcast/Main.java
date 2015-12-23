@@ -120,7 +120,7 @@ public class Main {
 				final ChromeCast c = holder.getAndSet(null);
 				if (c != null) {
 					try {
-						c.stopApp();
+						CastHelper.tidyChromeCast(c);
 						c.disconnect();
 					}
 					catch (final IOException e) {
