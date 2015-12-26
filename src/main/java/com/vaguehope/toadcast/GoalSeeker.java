@@ -166,7 +166,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 		final boolean tPaused = this.targetPaused;
 
 		if (tState == null && !CastHelper.isRunningDefaultApp(cStatus)) {
-			return;
+			return; // If we do not have a target and default app is not running, do not mess with anything.
 		}
 
 		// Get things ready to compare.
@@ -191,6 +191,8 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 
 		// Got right URI?
 		if (!Objects.equals(cUrl, tUri)) {
+			if (tPaused) return; // We would load, but will wait until not paused before doing so.
+
 			CastHelper.readyChromeCast(c, cStatus);
 			final MediaStatus afterLoad = c.load(tState.getTitle(), tState.getRelativeArtUri(), tState.getMediaInfo().getCurrentURI(), tState.getContentType());
 			if (this.lastObservedPosition > MIN_POSITION_TO_RESTORE_SECONDS) {
