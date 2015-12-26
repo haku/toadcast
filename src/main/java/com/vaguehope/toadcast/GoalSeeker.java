@@ -135,6 +135,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 
 		if (!c.isConnected()) {
 			try {
+				c.disconnect();
 				c.connect();
 				LOG.info("Connected to ChromeCast {}.", c.getAddress());
 				markLastSuccess();
