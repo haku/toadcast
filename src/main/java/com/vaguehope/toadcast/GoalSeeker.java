@@ -119,10 +119,16 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 	 * NOTE: Pushed MEDIA_STATUS objects are incomplete and not suitable for general goal seeking.
 	 */
 	private void onEventMediaStatus (final MediaStatus status) {
-		if (status.mediaSessionId == this.ourMediaSessionId && GOAL_REACHED_IF_IDLE_REASONS.contains(status.idleReason)) {
-			LOG.info("Session {} goal reached by idle reason: {}", this.ourMediaSessionId, status.idleReason);
-			this.targetPlayingState = null;
-			this.lastObservedPosition = 0;
+		if (status.mediaSessionId == this.ourMediaSessionId) {
+			if (GOAL_REACHED_IF_IDLE_REASONS.contains(status.idleReason)) {
+				LOG.info("Session {} goal reached by idle reason: {}", this.ourMediaSessionId, status.idleReason);
+				this.targetPlayingState = null;
+				this.lastObservedPosition = 0;
+			}
+		}
+		else {
+			LOG.warn("Unexpected spontaneous media status: mediaSessionId={} playerState={} idleReason={}",
+					status.mediaSessionId, status.playerState, status.idleReason);
 		}
 	}
 
@@ -229,6 +235,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 			final MediaStatus afterLoad = c.load(tState.getTitle(), tState.getRelativeArtUri(), tState.getMediaInfo().getCurrentURI(), tState.getContentType());
 			if (this.lastObservedPosition > MIN_POSITION_TO_RESTORE_SECONDS) {
 				c.seek(this.lastObservedPosition);
+				this.lastObservedPosition = 0;
 				LOG.info("Restored position to {}s.", this.lastObservedPosition);
 			}
 			if (afterLoad != null) {
