@@ -160,7 +160,9 @@ public class Main {
 		final String hostName = InetAddress.getLocalHost().getHostName();
 		LOG.info("hostName: {}", hostName);
 
-		final String friendlyName = String.format("%s \"%s\" (%s)", C.METADATA_MODEL_NAME, args.getChromecast(), hostName);
+		final String friendlyName = args.getDisplayName(String.format(
+				"%s \"%s\" (%s)", C.METADATA_MODEL_NAME,
+				args.getChromecast(), hostName));
 
 		final UDN usi = UDN.uniqueSystemIdentifier("ToadCast-ChromeCastRenderer");
 		LOG.info("uniqueSystemIdentifier: {}", usi);
