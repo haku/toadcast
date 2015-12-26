@@ -32,6 +32,11 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 	 */
 	private static final long GIVEUP_AND_REDISCOVER_TIMEOUT_MILLIS = TimeUnit.MINUTES.toMillis(1);
 
+	/**
+	 * Only try and restore position if played at least this far though.
+	 */
+	private static final int MIN_POSITION_TO_RESTORE_SECONDS = 1;
+
 	private static final Set<IdleReason> GOAL_REACHED_IF_IDLE_REASONS = EnumSet.of(IdleReason.CANCELLED, IdleReason.INTERRUPTED, IdleReason.FINISHED, IdleReason.ERROR, IdleReason.COMPLETED);
 
 	private static final Logger LOG = LoggerFactory.getLogger(GoalSeeker.class);
@@ -50,11 +55,15 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 	private volatile PlayingState targetPlayingState;
 	private volatile boolean targetPaused;
 
+	// Recovery info.
+	private volatile double lastObservedPosition;
+
 	public GoalSeeker (final AtomicReference<ChromeCast> chromecastHolder) {
 		this.chromecastHolder = chromecastHolder;
 		setCurrentMediaStatus(null);
 		this.targetPlayingState = null;
 		this.targetPaused = false;
+		this.lastObservedPosition = 0;
 	}
 
 	@Override
@@ -96,6 +105,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 			markLastSuccess();
 		}
 		catch (NotConnectedExecption | NoResponseException e) {
+			LOG.info("ChromeCast connection error: {}", e.toString());
 			checkNoSuccessTimeout(c);
 		}
 	}
@@ -110,7 +120,12 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 			if (this.chromecastHolder.compareAndSet(c, null)) {
 				LOG.info("Abandoning non-responsive ChromeCast {} after {}s, re-discovering...",
 						c.getAddress(), TimeUnit.MILLISECONDS.toSeconds(millisSinceLastSuccess));
-				ChromeCasts.startDiscovery(); // Listener in Main should still be registered.
+				try {
+					c.disconnect();
+				}
+				finally {
+					ChromeCasts.startDiscovery(); // Listener in Main should still be registered.
+				}
 			}
 		}
 	}
@@ -136,6 +151,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 			if (status.mediaSessionId == this.ourMediaSessionId && GOAL_REACHED_IF_IDLE_REASONS.contains(status.idleReason)) {
 				LOG.info("Session {} goal reached by idle reason: {}", this.ourMediaSessionId, status.idleReason);
 				this.targetPlayingState = null;
+				this.lastObservedPosition = 0;
 			}
 		}
 	}
@@ -162,13 +178,17 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 					default:
 				}
 			}
-			return;// Target state reached.  Stop.
+			return; // Target state reached.  Stop.
 		}
 
 		// Got right URI?
 		if (!Objects.equals(cUrl, tUri)) {
 			CastHelper.readyChromeCast(c);
 			final MediaStatus afterLoad = c.load(tState.getTitle(), tState.getRelativeArtUri(), tState.getMediaInfo().getCurrentURI(), tState.getContentType());
+			if (this.lastObservedPosition > MIN_POSITION_TO_RESTORE_SECONDS) {
+				c.seek(this.lastObservedPosition);
+				LOG.info("Restored position to {}s.", this.lastObservedPosition);
+			}
 			if (afterLoad != null) {
 				this.ourMediaSessionId = afterLoad.mediaSessionId;
 				setCurrentMediaStatus(afterLoad);
@@ -177,7 +197,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 				this.ourMediaSessionId = -2;
 			}
 			LOG.info("Loaded {} (session={}).", tState.getMediaInfo().getCurrentURI(), this.ourMediaSessionId);
-			return;
+			return; // Made a change, so return.
 		}
 
 		// Should resume / pause?
@@ -185,16 +205,18 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 			if (cState == PlayerState.PLAYING) {
 				c.pause();
 				LOG.info("Paused.");
-				return;
+				return; // Made a change, so return.
 			}
 		}
 		else {
 			if (cState == PlayerState.PAUSED) {
 				c.play();
 				LOG.info("Resumed.");
-				return;
+				return; // Made a change, so return.
 			}
 		}
+
+		this.lastObservedPosition = cStatus.currentTime;
 	}
 
 	/**
@@ -217,6 +239,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 	}
 
 	public void gotoPlaying (final PlayingState playingState) {
+		this.lastObservedPosition = 0; // Set before state.
 		this.targetPlayingState = playingState;
 		this.targetPaused = false;
 	}
@@ -231,6 +254,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 
 	public void gotoStopped () {
 		this.targetPlayingState = null;
+		this.lastObservedPosition = 0; // Set after state.
 	}
 
 	@Override
