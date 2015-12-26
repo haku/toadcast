@@ -131,15 +131,19 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 	}
 
 	private void readStatusAndSeekGoal (final ChromeCast c) throws IOException {
-		final MediaStatus cStatus = readCurrent(c);
-		readPushedStatus(); // Specifically after readCurrent() to allow longer for msgs to arrive.
-		seekGoal(c, cStatus);
-	}
+		final Status status = CastHelper.readStatus(c);
 
-	private MediaStatus readCurrent (final ChromeCast c) throws IOException {
-		final MediaStatus cStatus = CastHelper.readMediaStatus(c);
-		setCurrentMediaStatus(cStatus);
-		return cStatus;
+		final MediaStatus mStatus;
+		if (CastHelper.isRunningDefaultApp(status)) {
+			mStatus = CastHelper.readMediaStatus(c);
+		}
+		else {
+			mStatus = null;
+		}
+		setCurrentMediaStatus(mStatus);
+
+		readPushedStatus(); // Specifically after readCurrent() to allow longer for msgs to arrive.
+		seekGoal(c, status, mStatus);
 	}
 
 	/**
@@ -156,16 +160,20 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 		}
 	}
 
-	private void seekGoal (final ChromeCast c, final MediaStatus cStatus) throws IOException {
+	private void seekGoal (final ChromeCast c, final Status cStatus, final MediaStatus cMStatus) throws IOException {
 		// Capture target.
 		final PlayingState tState = this.targetPlayingState;
 		final boolean tPaused = this.targetPaused;
 
+		if (tState == null && !CastHelper.isRunningDefaultApp(cStatus)) {
+			return;
+		}
+
 		// Get things ready to compare.
-		final Media cMedia = cStatus != null ? cStatus.media : null;
+		final Media cMedia = cMStatus != null ? cMStatus.media : null;
 		final String cUrl = cMedia != null ? StringUtils.trimToNull(cMedia.url) : null;
 		final String tUri = tState != null ? StringUtils.trimToNull(tState.getMediaInfo().getCurrentURI()) : null;
-		final PlayerState cState = cStatus != null ? cStatus.playerState : null;
+		final PlayerState cState = cMStatus != null ? cMStatus.playerState : null;
 
 		// Should stop?
 		if (tState == null || tUri == null) {
@@ -183,7 +191,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 
 		// Got right URI?
 		if (!Objects.equals(cUrl, tUri)) {
-			CastHelper.readyChromeCast(c);
+			CastHelper.readyChromeCast(c, cStatus);
 			final MediaStatus afterLoad = c.load(tState.getTitle(), tState.getRelativeArtUri(), tState.getMediaInfo().getCurrentURI(), tState.getContentType());
 			if (this.lastObservedPosition > MIN_POSITION_TO_RESTORE_SECONDS) {
 				c.seek(this.lastObservedPosition);
@@ -216,7 +224,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 			}
 		}
 
-		this.lastObservedPosition = cStatus.currentTime;
+		this.lastObservedPosition = cMStatus.currentTime;
 	}
 
 	/**
