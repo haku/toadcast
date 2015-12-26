@@ -1,8 +1,13 @@
 Toadcast
 ========
 
-Make a ChromeCast look like a normal DLNA renderer.
-Handy if you have a media system that understands DLNA renderers that you want to use with a ChromeCast Audio.
+Makes a ChromeCast look like a normal DLNA renderer.
+Handy if you have a media system that understands DLNA renderers that you want to use with a ChromeCast (both Audio and Video editions).
+
+* Tracks ChromeCast by name, so should rediscover it when IP address changes.
+* Should pause and resume correctly even after ChromeCast app has idle timed out.
+* Should not interfere with other ChromeCast clients when idle.
+* Should recover and resume playback if ChromeCast disconnects or power cycles.
 
 Build
 -----
