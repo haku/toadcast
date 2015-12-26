@@ -49,6 +49,9 @@ public class CastHelper {
 		return runningAppId;
 	}
 
+	/**
+	 * May not return null.
+	 */
 	private static Status readStatusWithRetry (final ChromeCast c) throws IOException {
 		if (!c.isConnected()) throw new NotConnectedExecption(c);
 
@@ -59,14 +62,18 @@ public class CastHelper {
 		return s;
 	}
 
+	/**
+	 * May return null, e.g.:
+	 * <pre>
+	 * --> {"type":"GET_STATUS","requestId":186}
+	 * <-- {"type":"MEDIA_STATUS","status":[],"requestId":186}
+	 * </pre>
+	 */
 	private static MediaStatus readMediaStatusWithRetry (final ChromeCast c) throws IOException {
 		if (!c.isConnected()) throw new NotConnectedExecption(c);
 
 		// TODO retry loop.
-		final MediaStatus s = c.getMediaStatus();
-
-		if (s == null) throw new NoResponseException(String.format("(%s).getStatus() did not return a response.", c.getAddress()));
-		return s;
+		return c.getMediaStatus();
 	}
 
 }
