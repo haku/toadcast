@@ -4,8 +4,8 @@ import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.EnumSet;
 import java.util.Objects;
-import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -25,6 +25,8 @@ import su.litvak.chromecast.api.v2.MediaStatus.PlayerState;
 import su.litvak.chromecast.api.v2.Status;
 
 public class GoalSeeker implements Runnable, ChromeCastEventListener {
+
+	private static final long POLL_INTERVAL_MILLIS = TimeUnit.SECONDS.toMillis(1);
 
 	/**
 	 * If nothing happy back from ChromeCast in the time, start everything over.
@@ -49,7 +51,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 	// Where we are.
 	private volatile Timestamped<MediaStatus> currentMediaStatus;
 	private volatile long ourMediaSessionId;
-	private final Queue<MediaStatus> pushedStatus = new LinkedBlockingQueue<MediaStatus>();
+	private final BlockingQueue<Object> eventQueue = new LinkedBlockingQueue<>();
 
 	// Where we want to be.
 	private volatile PlayingState targetPlayingState;
@@ -69,7 +71,19 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 	@Override
 	public void run () {
 		try {
-			callUnsafe();
+			while (true) {
+				poll();
+			}
+		}
+		finally {
+			LOG.warn("Ended.");
+		}
+	}
+
+	private void poll () {
+		try {
+			readEventQueue(); // Blocks / rate limits.
+			connectAndReadStateAndSeekGoal();
 		}
 		catch (final Exception e) {
 			LOG.warn("Unhandled error while reading / writing ChromeCast state.", e);
@@ -80,7 +94,38 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 		}
 	}
 
-	private void callUnsafe () throws IOException {
+	private void readEventQueue () {
+		try {
+			long timeoutMillis = POLL_INTERVAL_MILLIS;
+			Object obj;
+			while ((obj = this.eventQueue.poll(timeoutMillis, TimeUnit.MILLISECONDS)) != null) {
+				timeoutMillis = 0L; // If something happened, stop sleeping.
+				if (obj instanceof Boolean) {
+					// For short-circuiting timeout after goal change.
+				}
+				else if (obj instanceof MediaStatus) {
+					onEventMediaStatus((MediaStatus) obj);
+				}
+				else {
+					LOG.warn("Unexpected {} type on event queue: {}", obj.getClass(), obj);
+				}
+			}
+		}
+		catch (final InterruptedException e) {/* Unused. */ }
+	}
+
+	/**
+	 * NOTE: Pushed MEDIA_STATUS objects are incomplete and not suitable for general goal seeking.
+	 */
+	private void onEventMediaStatus (final MediaStatus status) {
+		if (status.mediaSessionId == this.ourMediaSessionId && GOAL_REACHED_IF_IDLE_REASONS.contains(status.idleReason)) {
+			LOG.info("Session {} goal reached by idle reason: {}", this.ourMediaSessionId, status.idleReason);
+			this.targetPlayingState = null;
+			this.lastObservedPosition = 0;
+		}
+	}
+
+	private void connectAndReadStateAndSeekGoal () throws IOException {
 		final ChromeCast c = this.chromecastHolder.get();
 		if (c == null) {
 			markLastSuccess(); // Did nothing successfully.
@@ -142,22 +187,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 		}
 		setCurrentMediaStatus(mStatus);
 
-		readPushedStatus(); // Specifically after readCurrent() to allow longer for msgs to arrive.
 		seekGoal(c, status, mStatus);
-	}
-
-	/**
-	 * NOTE: Pushed MEDIA_STATUS objects are incomplete and not suitable for general goal seeking.
-	 */
-	private void readPushedStatus () {
-		MediaStatus status;
-		while ((status = this.pushedStatus.poll()) != null) {
-			if (status.mediaSessionId == this.ourMediaSessionId && GOAL_REACHED_IF_IDLE_REASONS.contains(status.idleReason)) {
-				LOG.info("Session {} goal reached by idle reason: {}", this.ourMediaSessionId, status.idleReason);
-				this.targetPlayingState = null;
-				this.lastObservedPosition = 0;
-			}
-		}
 	}
 
 	private void seekGoal (final ChromeCast c, final Status cStatus, final MediaStatus cMStatus) throws IOException {
@@ -252,26 +282,35 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 		this.lastObservedPosition = 0; // Set before state.
 		this.targetPlayingState = playingState;
 		this.targetPaused = false;
+		this.eventQueue.offer(Boolean.TRUE);
 	}
 
 	public void gotoPaused () {
 		this.targetPaused = true;
+		this.eventQueue.offer(Boolean.TRUE);
 	}
 
 	public void gotoResumed () {
 		this.targetPaused = false;
+		this.eventQueue.offer(Boolean.TRUE);
 	}
 
 	public void gotoStopped () {
 		this.targetPlayingState = null;
 		this.lastObservedPosition = 0; // Set after state.
+		this.eventQueue.offer(Boolean.TRUE);
 	}
 
 	@Override
 	public void onSpontaneousMediaStatus (final MediaStatus mediaStatus) {
 		LOG.info("Spontaneous media status: mediaSessionId={} playerState={} idleReason={}",
 				mediaStatus.mediaSessionId, mediaStatus.playerState, mediaStatus.idleReason);
-		this.pushedStatus.add(mediaStatus);
+		try {
+			this.eventQueue.put(mediaStatus);
+		}
+		catch (final InterruptedException e) {
+			LOG.warn("Interupted while trying to enqueue spontaneous media status: {}", mediaStatus);
+		}
 	}
 
 	@Override

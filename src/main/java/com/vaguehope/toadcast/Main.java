@@ -107,7 +107,7 @@ public class Main {
 	private static void start (final Args args) throws Exception {// NOSONAR
 		final AtomicReference<ChromeCast> holder = new AtomicReference<ChromeCast>();
 		final GoalSeeker goalSeeker = new GoalSeeker(holder);
-		Executors.newScheduledThreadPool(1).scheduleWithFixedDelay(goalSeeker, 1, 1, TimeUnit.SECONDS);
+		Executors.newCachedThreadPool().execute(goalSeeker);
 		startChromecastDiscovery(args, holder, goalSeeker);
 		startUpnpService(args, goalSeeker);
 	}
