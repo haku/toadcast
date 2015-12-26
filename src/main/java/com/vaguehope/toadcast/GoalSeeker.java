@@ -1,6 +1,7 @@
 package com.vaguehope.toadcast;
 
 import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.util.EnumSet;
 import java.util.Objects;
 import java.util.Queue;
@@ -16,6 +17,7 @@ import org.slf4j.LoggerFactory;
 
 import su.litvak.chromecast.api.v2.ChromeCast;
 import su.litvak.chromecast.api.v2.ChromeCastEventListener;
+import su.litvak.chromecast.api.v2.ChromeCasts;
 import su.litvak.chromecast.api.v2.Media;
 import su.litvak.chromecast.api.v2.MediaStatus;
 import su.litvak.chromecast.api.v2.MediaStatus.IdleReason;
@@ -24,11 +26,20 @@ import su.litvak.chromecast.api.v2.Status;
 
 public class GoalSeeker implements Runnable, ChromeCastEventListener {
 
+	/**
+	 * If nothing happy back from ChromeCast in the time, start everything over.
+	 * TODO Is this too long?
+	 */
+	private static final long GIVEUP_AND_REDISCOVER_TIMEOUT_MILLIS = TimeUnit.MINUTES.toMillis(1);
+
 	private static final Set<IdleReason> GOAL_REACHED_IF_IDLE_REASONS = EnumSet.of(IdleReason.CANCELLED, IdleReason.INTERRUPTED, IdleReason.FINISHED, IdleReason.ERROR, IdleReason.COMPLETED);
 
 	private static final Logger LOG = LoggerFactory.getLogger(GoalSeeker.class);
 
 	private final AtomicReference<ChromeCast> chromecastHolder;
+
+	// Reliability tracking.
+	private volatile long lastSuccessTime;
 
 	// Where we are.
 	private volatile Timestamped<MediaStatus> currentMediaStatus;
@@ -52,7 +63,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 			callUnsafe();
 		}
 		catch (final Exception e) {
-			LOG.warn("Unhandled error while reading / writing Chromecast state.", e);
+			LOG.warn("Unhandled error while reading / writing ChromeCast state.", e);
 			try {
 				Thread.sleep(TimeUnit.SECONDS.toMillis(10));// Rate limit errors.
 			}
@@ -62,12 +73,51 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 
 	private void callUnsafe () throws IOException {
 		final ChromeCast c = this.chromecastHolder.get();
-		if (c == null || !c.isConnected()) return;
+		if (c == null) {
+			markLastSuccess(); // Did nothing successfully.
+			return;
+		}
 
-		// TODO If persistent connecting issues, forget and restart discovery.
+		if (!c.isConnected()) {
+			try {
+				c.connect();
+				LOG.info("Connected to ChromeCast {}.", c.getAddress());
+				markLastSuccess();
+			}
+			catch (final GeneralSecurityException e) {
+				LOG.warn("Failed to connect: ", e);
+				checkNoSuccessTimeout(c);
+				return;
+			}
+		};
 
+		try {
+			readStatusAndSeekGoal(c);
+			markLastSuccess();
+		}
+		catch (NotConnectedExecption | NoResponseException e) {
+			checkNoSuccessTimeout(c);
+		}
+	}
+
+	private void markLastSuccess () {
+		this.lastSuccessTime = System.currentTimeMillis();
+	}
+
+	private void checkNoSuccessTimeout (final ChromeCast c) throws IOException {
+		final long millisSinceLastSuccess = System.currentTimeMillis() - this.lastSuccessTime;
+		if (millisSinceLastSuccess > GIVEUP_AND_REDISCOVER_TIMEOUT_MILLIS) {
+			if (this.chromecastHolder.compareAndSet(c, null)) {
+				LOG.info("Abandoning non-responsive ChromeCast {} after {}s, re-discovering...",
+						c.getAddress(), TimeUnit.MILLISECONDS.toSeconds(millisSinceLastSuccess));
+				ChromeCasts.startDiscovery(); // Listener in Main should still be registered.
+			}
+		}
+	}
+
+	private void readStatusAndSeekGoal (final ChromeCast c) throws IOException {
 		final MediaStatus cStatus = readCurrent(c);
-		readPushedStatus(); // Specifically after readCurrent().
+		readPushedStatus(); // Specifically after readCurrent() to allow longer for msgs to arrive.
 		seekGoal(c, cStatus);
 	}
 

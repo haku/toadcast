@@ -5,7 +5,6 @@ import java.io.InputStream;
 import java.io.PrintStream;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.security.GeneralSecurityException;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -135,15 +134,14 @@ public class Main {
 				final String name = chromecast.getName();
 				if (name != null && name.toLowerCase(Locale.ENGLISH).contains(args.getChromecast().toLowerCase(Locale.ENGLISH))) {
 					if (holder.compareAndSet(null, chromecast)) {
+						chromecast.registerListener(eventListener);
+						LOG.info("ChromeCast found: {}", name);
+
 						try {
-							chromecast.connect();
-							chromecast.registerListener(eventListener);
-							LOG.info("ChromeCast found: {}", name);
 							ChromeCasts.stopDiscovery();
 						}
-						catch (final IOException | GeneralSecurityException e) {
-							holder.compareAndSet(chromecast, null);
-							LOG.warn("Failed to connect: ", e);
+						catch (final IOException e) {
+							LOG.warn("Failed to stop discovery.", e);
 						}
 					}
 				}
