@@ -54,18 +54,16 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 	private final BlockingQueue<Object> eventQueue = new LinkedBlockingQueue<>();
 
 	// Where we want to be.
-	private volatile PlayingState targetPlayingState;
-	private volatile boolean targetPaused;
+	private volatile PlayingState targetPlayingState = null;
+	private volatile boolean targetPaused = false;
+	private volatile long seekToSeconds = -1;
 
 	// Recovery info.
-	private volatile double lastObservedPosition;
+	private volatile double lastObservedPosition = 0;
 
 	public GoalSeeker (final AtomicReference<ChromeCast> chromecastHolder) {
 		this.chromecastHolder = chromecastHolder;
 		setCurrentMediaStatus(null);
-		this.targetPlayingState = null;
-		this.targetPaused = false;
-		this.lastObservedPosition = 0;
 	}
 
 	@Override
@@ -102,6 +100,9 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 				timeoutMillis = 0L; // If something happened, stop sleeping.
 				if (obj instanceof Boolean) {
 					// For short-circuiting timeout after goal change.
+				}
+				else if (obj instanceof Long) {
+					this.seekToSeconds = (Long) obj;
 				}
 				else if (obj instanceof MediaStatus) {
 					onEventMediaStatus((MediaStatus) obj);
@@ -256,6 +257,13 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 			}
 		}
 
+		// Check and set should be safe as only our thread should be updating it.
+		if (this.seekToSeconds >= 0) {
+			c.seek(this.seekToSeconds);
+			LOG.info("Set position to {}s.", this.seekToSeconds);
+			this.seekToSeconds = -1;
+		}
+
 		this.lastObservedPosition = cMStatus.currentTime;
 	}
 
@@ -299,6 +307,10 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 		this.targetPlayingState = null;
 		this.lastObservedPosition = 0; // Set after state.
 		this.eventQueue.offer(Boolean.TRUE);
+	}
+
+	public void seek (final long targetSeconds) {
+		this.eventQueue.offer(Long.valueOf(targetSeconds));
 	}
 
 	@Override

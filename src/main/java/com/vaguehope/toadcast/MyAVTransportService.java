@@ -20,6 +20,7 @@ import org.fourthline.cling.support.model.DeviceCapabilities;
 import org.fourthline.cling.support.model.MediaInfo;
 import org.fourthline.cling.support.model.PlayMode;
 import org.fourthline.cling.support.model.PositionInfo;
+import org.fourthline.cling.support.model.SeekMode;
 import org.fourthline.cling.support.model.StorageMedium;
 import org.fourthline.cling.support.model.TransportAction;
 import org.fourthline.cling.support.model.TransportInfo;
@@ -269,13 +270,19 @@ public class MyAVTransportService extends AbstractAVTransportService {
 	}
 
 	@Override
-	public void record (final UnsignedIntegerFourBytes instanceId) throws AVTransportException {
-		LOG.info("TODO record({})", instanceId);
+	public void seek (final UnsignedIntegerFourBytes instanceId, final String unit, final String target) throws AVTransportException {
+		LOG.info("seek({}, {}, {})", instanceId, unit, target);
+
+		final SeekMode seekMode = SeekMode.valueOrExceptionOf(unit);
+		if (!seekMode.equals(SeekMode.REL_TIME)) throw new AVTransportException(ErrorCode.INVALID_ARGS, "Unsupported SeekMode: " + unit);
+
+		final long targetSeconds = ModelUtil.fromTimeString(target);
+		this.goalSeeker.seek(targetSeconds);
 	}
 
 	@Override
-	public void seek (final UnsignedIntegerFourBytes instanceId, final String unit, final String target) throws AVTransportException {
-		LOG.info("TODO seek({}, {}, {})", instanceId, unit, target);
+	public void record (final UnsignedIntegerFourBytes instanceId) throws AVTransportException {
+		LOG.info("TODO record({})", instanceId);
 	}
 
 	@Override
