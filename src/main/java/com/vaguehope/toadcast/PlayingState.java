@@ -1,12 +1,19 @@
 package com.vaguehope.toadcast;
 
 import java.net.URI;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.fourthline.cling.support.model.DIDLObject;
 import org.fourthline.cling.support.model.MediaInfo;
 import org.fourthline.cling.support.model.Res;
 import org.fourthline.cling.support.model.item.Item;
+
+import su.litvak.chromecast.api.v2.Media;
+import su.litvak.chromecast.api.v2.Media.StreamType;
 
 public class PlayingState {
 
@@ -15,7 +22,7 @@ public class PlayingState {
 
 	private final MediaInfo mediaInfo;
 	private final String title;
-	private final String relativeArtUri;
+	private final String artUri;
 	private final String contentType;
 
 	public PlayingState (final MediaInfo mediaInfo, final Item item) {
@@ -28,12 +35,10 @@ public class PlayingState {
 
 			final List<URI> arts = item.getPropertyValues(DIDLObject.Property.UPNP.ALBUM_ART_URI.class);
 			if (arts != null && arts.size() > 0) {
-				final URI artUri = arts.get(0);
-				final URI mediaUri = URI.create(mediaInfo.getCurrentURI());
-				this.relativeArtUri = mediaUri.relativize(artUri).toString();
+				this.artUri = arts.get(0).toString();
 			}
 			else {
-				this.relativeArtUri = null;
+				this.artUri = null;
 			}
 
 			Res res = null;
@@ -56,7 +61,7 @@ public class PlayingState {
 		}
 		else {
 			this.title = DEFAULT_TITLE;
-			this.relativeArtUri = null;
+			this.artUri = null;
 			this.contentType = DEFAULT_CONTENT_TYPE;
 		}
 	}
@@ -68,16 +73,16 @@ public class PlayingState {
 		return this.mediaInfo;
 	}
 
-	public String getTitle () {
-		return this.title;
-	}
-
-	public String getRelativeArtUri () {
-		return this.relativeArtUri;
-	}
-
-	public String getContentType () {
-		return this.contentType;
+	/**
+	 * https://developers.google.com/cast/docs/reference/messages#MediaInformation
+	 */
+	public Media toChromeCastMedia () {
+		final Map<String, Object> metadata = new HashMap<>();
+		metadata.put("metadataType", 0);
+		metadata.put("title", this.title);
+		metadata.put("images", Arrays.<Map<?, ?>>asList(Collections.<String, String>singletonMap("url", this.artUri)));
+		return new Media(this.mediaInfo.getCurrentURI(), this.contentType,
+				null, StreamType.BUFFERED, null, metadata, null, null);
 	}
 
 }

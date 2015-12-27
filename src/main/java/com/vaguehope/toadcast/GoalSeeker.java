@@ -245,7 +245,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 			if (this.ourMediaSessionId > 0 && lop.age(TimeUnit.SECONDS) < WAIT_FOR_MEDIA_SESSION_END_TIMEOUT_SECONDS) return;
 
 			CastHelper.readyChromeCast(c, cStatus);
-			final MediaStatus afterLoad = c.load(tState.getTitle(), tState.getRelativeArtUri(), tState.getMediaInfo().getCurrentURI(), tState.getContentType());
+			final MediaStatus afterLoad = c.load(tState.toChromeCastMedia(), null);
 			if (afterLoad != null) {
 				this.ourMediaSessionId = afterLoad.mediaSessionId;
 				setCurrentMediaStatus(afterLoad);
