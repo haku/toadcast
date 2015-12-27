@@ -35,6 +35,12 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 	private static final long GIVEUP_AND_REDISCOVER_TIMEOUT_MILLIS = TimeUnit.MINUTES.toMillis(1);
 
 	/**
+	 * If there should be something playing but there is not, wait at least this long before trying to play it again.
+	 * This allows time for session end event to arrive and be processed.
+	 */
+	private static final int WAIT_FOR_MEDIA_SESSION_END_TIMEOUT_SECONDS = 5;
+
+	/**
 	 * Only try and restore position if played at least this far though.
 	 */
 	private static final int MIN_POSITION_TO_RESTORE_SECONDS = 1;
@@ -59,11 +65,12 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 	private volatile long seekToSeconds = -1;
 
 	// Recovery info.
-	private volatile double lastObservedPosition = 0;
+	private volatile Timestamped<Double> lastObservedPosition;
 
 	public GoalSeeker (final AtomicReference<ChromeCast> chromecastHolder) {
 		this.chromecastHolder = chromecastHolder;
 		setCurrentMediaStatus(null);
+		setLastObservedPosition(0);
 	}
 
 	@Override
@@ -123,7 +130,8 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 			if (GOAL_REACHED_IF_IDLE_REASONS.contains(status.idleReason)) {
 				LOG.info("Goal for mediaSessionId={} reached by idle reason: {}", this.ourMediaSessionId, status.idleReason);
 				this.targetPlayingState = null;
-				this.lastObservedPosition = 0;
+				setLastObservedPosition(0);
+				this.ourMediaSessionId = -2; // Session is over.
 			}
 		}
 		else {
@@ -231,6 +239,11 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 		if (!Objects.equals(cUrl, tUri)) {
 			if (tPaused) return; // We would load, but will wait until not paused before doing so.
 
+			// If mediaSessionId is still set, ChromeCast session ended event might still be en-route.
+			// If age of last observed position is too young, wait a bit in case end event turns up.
+			final Timestamped<Double> lop = this.lastObservedPosition;
+			if (this.ourMediaSessionId > 0 && lop.age(TimeUnit.SECONDS) < WAIT_FOR_MEDIA_SESSION_END_TIMEOUT_SECONDS) return;
+
 			CastHelper.readyChromeCast(c, cStatus);
 			final MediaStatus afterLoad = c.load(tState.getTitle(), tState.getRelativeArtUri(), tState.getMediaInfo().getCurrentURI(), tState.getContentType());
 			if (afterLoad != null) {
@@ -242,8 +255,8 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 			}
 			LOG.info("Loaded {} (mediaSessionId={}).", tState.getMediaInfo().getCurrentURI(), this.ourMediaSessionId);
 
-			if (this.lastObservedPosition > MIN_POSITION_TO_RESTORE_SECONDS) {
-				c.seek(this.lastObservedPosition);
+			if (lop.get() > MIN_POSITION_TO_RESTORE_SECONDS) {
+				c.seek(lop.get());
 				LOG.info("Restored position to {}s.", this.lastObservedPosition);
 			}
 
@@ -273,7 +286,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 			this.seekToSeconds = -1;
 		}
 
-		this.lastObservedPosition = cMStatus.currentTime;
+		setLastObservedPosition(cMStatus.currentTime);
 	}
 
 	/**
@@ -295,8 +308,12 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 		return this.targetPlayingState;
 	}
 
+	public void setLastObservedPosition (final double position) {
+		this.lastObservedPosition = new Timestamped<Double>(position);
+	}
+
 	public void gotoPlaying (final PlayingState playingState) {
-		this.lastObservedPosition = 0; // Set before state.
+		setLastObservedPosition(0); // Set before state.
 		this.targetPlayingState = playingState;
 		this.targetPaused = false;
 		this.eventQueue.offer(Boolean.TRUE);
@@ -314,7 +331,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 
 	public void gotoStopped () {
 		this.targetPlayingState = null;
-		this.lastObservedPosition = 0; // Set after state.
+		setLastObservedPosition(0); // Set after state.
 		this.eventQueue.offer(Boolean.TRUE);
 	}
 
