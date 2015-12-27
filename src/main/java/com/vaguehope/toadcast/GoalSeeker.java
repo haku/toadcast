@@ -121,7 +121,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 	private void onEventMediaStatus (final MediaStatus status) {
 		if (status.mediaSessionId == this.ourMediaSessionId) {
 			if (GOAL_REACHED_IF_IDLE_REASONS.contains(status.idleReason)) {
-				LOG.info("Session {} goal reached by idle reason: {}", this.ourMediaSessionId, status.idleReason);
+				LOG.info("Goal for mediaSessionId={} reached by idle reason: {}", this.ourMediaSessionId, status.idleReason);
 				this.targetPlayingState = null;
 				this.lastObservedPosition = 0;
 			}
@@ -240,7 +240,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 			else {
 				this.ourMediaSessionId = -2;
 			}
-			LOG.info("Loaded {} (session={}).", tState.getMediaInfo().getCurrentURI(), this.ourMediaSessionId);
+			LOG.info("Loaded {} (mediaSessionId={}).", tState.getMediaInfo().getCurrentURI(), this.ourMediaSessionId);
 
 			if (this.lastObservedPosition > MIN_POSITION_TO_RESTORE_SECONDS) {
 				c.seek(this.lastObservedPosition);
