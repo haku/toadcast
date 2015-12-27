@@ -233,11 +233,6 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 
 			CastHelper.readyChromeCast(c, cStatus);
 			final MediaStatus afterLoad = c.load(tState.getTitle(), tState.getRelativeArtUri(), tState.getMediaInfo().getCurrentURI(), tState.getContentType());
-			if (this.lastObservedPosition > MIN_POSITION_TO_RESTORE_SECONDS) {
-				c.seek(this.lastObservedPosition);
-				this.lastObservedPosition = 0;
-				LOG.info("Restored position to {}s.", this.lastObservedPosition);
-			}
 			if (afterLoad != null) {
 				this.ourMediaSessionId = afterLoad.mediaSessionId;
 				setCurrentMediaStatus(afterLoad);
@@ -246,6 +241,12 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 				this.ourMediaSessionId = -2;
 			}
 			LOG.info("Loaded {} (session={}).", tState.getMediaInfo().getCurrentURI(), this.ourMediaSessionId);
+
+			if (this.lastObservedPosition > MIN_POSITION_TO_RESTORE_SECONDS) {
+				c.seek(this.lastObservedPosition);
+				LOG.info("Restored position to {}s.", this.lastObservedPosition);
+			}
+
 			return; // Made a change, so return.
 		}
 
