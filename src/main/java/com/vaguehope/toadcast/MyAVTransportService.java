@@ -123,6 +123,7 @@ public class MyAVTransportService extends AbstractAVTransportService {
 		final TransportState transportState;
 
 		final PlayingState tState = this.goalSeeker.getTargetPlayingState();
+		final boolean tPaused = this.goalSeeker.isTargetPaused();
 		final Timestamped<MediaStatus> mediaStatusHolder = this.goalSeeker.getCurrentMediaStatus(); // TODO check freshness?
 		if (tState != null) {
 			final String tUrl = StringUtils.trimToNull(tState.getMediaInfo().getCurrentURI());
@@ -149,6 +150,9 @@ public class MyAVTransportService extends AbstractAVTransportService {
 				else {
 					transportState = TransportState.NO_MEDIA_PRESENT;
 				}
+			}
+			else if (tUrl != null && cUrl == null && tPaused) { // Paused for a while and app has timed out.
+				transportState = TransportState.PAUSED_PLAYBACK;
 			}
 			else {
 				transportState = TransportState.TRANSITIONING;

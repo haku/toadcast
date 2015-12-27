@@ -307,6 +307,10 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 		return this.targetPlayingState;
 	}
 
+	public boolean isTargetPaused () {
+		return this.targetPaused;
+	}
+
 	public void setLastObservedPosition (final double position) {
 		this.lastObservedPosition = new Timestamped<Double>(position);
 	}
