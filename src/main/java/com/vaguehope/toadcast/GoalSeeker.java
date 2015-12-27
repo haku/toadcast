@@ -1,7 +1,6 @@
 package com.vaguehope.toadcast;
 
 import java.io.IOException;
-import java.security.GeneralSecurityException;
 import java.util.EnumSet;
 import java.util.Objects;
 import java.util.Set;
@@ -154,7 +153,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 				LOG.info("Connected to ChromeCast {}.", c.getAddress());
 				markLastSuccess();
 			}
-			catch (final GeneralSecurityException e) {
+			catch (final Exception e) {
 				LOG.warn("Failed to connect: ", e);
 				checkNoSuccessTimeout(c);
 				return;
@@ -166,7 +165,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 			markLastSuccess();
 		}
 		catch (NotConnectedExecption | NoResponseException e) {
-			LOG.info("ChromeCast connection error: {}", e.toString());
+			LOG.warn("ChromeCast connection error: {}", e.toString());
 			checkNoSuccessTimeout(c);
 		}
 	}
@@ -179,7 +178,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 		final long millisSinceLastSuccess = System.currentTimeMillis() - this.lastSuccessTime;
 		if (millisSinceLastSuccess > GIVEUP_AND_REDISCOVER_TIMEOUT_MILLIS) {
 			if (this.chromecastHolder.compareAndSet(c, null)) {
-				LOG.info("Abandoning non-responsive ChromeCast {} after {}s, re-discovering...",
+				LOG.warn("Abandoning non-responsive ChromeCast {} after {}s, re-discovering...",
 						c.getAddress(), TimeUnit.MILLISECONDS.toSeconds(millisSinceLastSuccess));
 				try {
 					c.disconnect();
