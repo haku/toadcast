@@ -25,4 +25,9 @@ public class Timestamped<T> {
 		return this.v;
 	}
 
+	@Override
+	public String toString () {
+		return String.format("Timestamped{%s @%s}", this.v, this.time);
+	}
+
 }
