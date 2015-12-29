@@ -164,7 +164,7 @@ public class Main {
 				"%s \"%s\" (%s)", C.METADATA_MODEL_NAME,
 				args.getChromecast(), hostName));
 
-		final UDN usi = UDN.uniqueSystemIdentifier("ToadCast-ChromeCastRenderer");
+		final UDN usi = UDN.uniqueSystemIdentifier("ToadCast-ChromeCastRenderer-" + args.getChromecast());
 		LOG.info("uniqueSystemIdentifier: {}", usi);
 
 		final UpnpService upnpService = makeUpnpServer();
