@@ -144,6 +144,9 @@ public class Main {
 							LOG.warn("Failed to stop discovery.", e);
 						}
 					}
+					else {
+						LOG.info("ChromeCast found, but we already have one: {}", name);
+					}
 				}
 				else {
 					LOG.info("Not the ChromeCast we are looking for: {}", name);
