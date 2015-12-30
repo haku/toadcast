@@ -18,6 +18,8 @@ public class CastHelper {
 
 	private static final Set<String> CHROMECAST_MODEL_NAMES = new HashSet<>(Arrays.asList(
 			"Eureka Dongle", "Chromecast Audio"));
+	private static final Set<String> CAN_INTERUPT_APP_NAMES = new HashSet<>(Arrays.asList(
+			"Backdrop"));
 	private static final String CHROME_CAST_DEFAULT_APP_ID = "CC1AD845";
 	private static final Logger LOG = LoggerFactory.getLogger(CastHelper.class);
 
@@ -52,7 +54,10 @@ public class CastHelper {
 		final String runningAppId = readRunningAppId(status);
 		if (!CHROME_CAST_DEFAULT_APP_ID.equals(runningAppId)) {
 			if (runningAppId != null) {
-				LOG.info("Running app not default, stopping: {}", runningAppId);
+				final Application app = status.getRunningApp();
+				if (!CAN_INTERUPT_APP_NAMES.contains(app.name)) throw new ChromeCastInUseException(c, app);
+				LOG.info("Interupting running app: appId={}, name={}, status={}.",
+						app.id, app.name, app.statusText);
 				c.stopApp();
 			}
 			LOG.info("Launching default app...");

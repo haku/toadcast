@@ -8,7 +8,7 @@ public class NotConnectedExecption extends ChromeCastException {
 	private static final long serialVersionUID = -6772785980952807985L;
 
 	public NotConnectedExecption (final ChromeCast c) {
-		super(String.format("%s is not connected.", c.getAddress()));
+		super(String.format("%s (%s) is not connected.", c.getName(), c.getAddress()));
 	}
 
 }
