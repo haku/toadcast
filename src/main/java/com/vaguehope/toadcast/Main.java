@@ -145,6 +145,9 @@ public class Main {
 						}
 					}
 				}
+				else {
+					LOG.info("Not the ChromeCast we are looking for: {}", name);
+				}
 			}
 
 			@Override
