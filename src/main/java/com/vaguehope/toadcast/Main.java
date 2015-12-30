@@ -26,12 +26,14 @@ import org.fourthline.cling.model.meta.LocalDevice;
 import org.fourthline.cling.model.meta.LocalService;
 import org.fourthline.cling.model.meta.ManufacturerDetails;
 import org.fourthline.cling.model.meta.ModelDetails;
+import org.fourthline.cling.model.meta.RemoteDevice;
 import org.fourthline.cling.model.resource.IconResource;
 import org.fourthline.cling.model.resource.Resource;
 import org.fourthline.cling.model.types.DeviceType;
 import org.fourthline.cling.model.types.UDADeviceType;
 import org.fourthline.cling.model.types.UDN;
 import org.fourthline.cling.protocol.ProtocolFactory;
+import org.fourthline.cling.registry.DefaultRegistryListener;
 import org.fourthline.cling.registry.Registry;
 import org.fourthline.cling.support.avtransport.lastchange.AVTransportLastChangeParser;
 import org.fourthline.cling.support.connectionmanager.ConnectionManagerService;
@@ -108,11 +110,12 @@ public class Main {
 		final AtomicReference<ChromeCast> holder = new AtomicReference<ChromeCast>();
 		final GoalSeeker goalSeeker = new GoalSeeker(holder);
 		Executors.newCachedThreadPool().execute(goalSeeker);
-		startChromecastDiscovery(args, holder, goalSeeker);
-		startUpnpService(args, goalSeeker);
+		startMdnsChromecastDiscovery(args, holder, goalSeeker);
+		final UpnpService upnpService = startUpnpService(args, goalSeeker);
+		startUpnpChromecastDiscovery(args, holder, goalSeeker, upnpService);
 	}
 
-	private static void startChromecastDiscovery (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastEventListener eventListener) throws Exception {// NOSONAR
+	private static void startMdnsChromecastDiscovery (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastEventListener eventListener) throws Exception {// NOSONAR
 		Runtime.getRuntime().addShutdownHook(new Thread() {
 			@Override
 			public void run () {
@@ -131,26 +134,7 @@ public class Main {
 		ChromeCasts.registerListener(new ChromeCastsListener() {
 			@Override
 			public void newChromeCastDiscovered (final ChromeCast chromecast) {
-				final String name = chromecast.getName();
-				if (name != null && name.toLowerCase(Locale.ENGLISH).contains(args.getChromecast().toLowerCase(Locale.ENGLISH))) {
-					if (holder.compareAndSet(null, chromecast)) {
-						chromecast.registerListener(eventListener);
-						LOG.info("ChromeCast found: {} ({})", name, chromecast.getAddress());
-
-						try {
-							ChromeCasts.stopDiscovery();
-						}
-						catch (final IOException e) {
-							LOG.warn("Failed to stop discovery.", e);
-						}
-					}
-					else {
-						LOG.info("ChromeCast found, but we already have one: {} ({})", name, chromecast.getAddress());
-					}
-				}
-				else {
-					LOG.info("Not the ChromeCast we are looking for: {} ({})", name, chromecast.getAddress());
-				}
+				chromecastFound(args, holder, eventListener, chromecast);
 			}
 
 			@Override
@@ -162,7 +146,52 @@ public class Main {
 		LOG.info("Watching for ChromeCast {} ...", args.getChromecast());
 	}
 
-	private static void startUpnpService (final Args args, final GoalSeeker goalSeeker) throws IOException, UnknownHostException, ValidationException {
+	private static void startUpnpChromecastDiscovery (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastEventListener eventListener, final UpnpService upnpService) {
+		upnpService.getRegistry().addListener(	new DefaultRegistryListener(){
+			@Override
+			public void remoteDeviceAdded (final Registry registry, final RemoteDevice device) {
+				try {
+					if ("Eureka Dongle".equals(device.getDetails().getModelDetails().getModelName())) {
+						final String name = device.getDetails().getFriendlyName();
+						final String host = device.getDetails().getBaseURL().getHost();
+						LOG.info("Found ChromeCast via UPNP: ({}) ({})", name, host);
+
+						final ChromeCast chromecast = new ChromeCast(host);
+						chromecast.setName(name);
+						chromecastFound(args, holder, eventListener, chromecast);
+					}
+				}
+				catch (final Exception e) {
+					LOG.warn("Error handling UPNP device {}: {}", device, e);
+				}
+			}
+		});
+	}
+
+	private static void chromecastFound (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastEventListener eventListener, final ChromeCast chromecast) {
+		final String name = chromecast.getName();
+		if (name != null && name.toLowerCase(Locale.ENGLISH).contains(args.getChromecast().toLowerCase(Locale.ENGLISH))) {
+			if (holder.compareAndSet(null, chromecast)) {
+				chromecast.registerListener(eventListener);
+				LOG.info("ChromeCast found: {} ({})", name, chromecast.getAddress());
+
+				try {
+					ChromeCasts.stopDiscovery();
+				}
+				catch (final IOException e) {
+					LOG.warn("Failed to stop discovery.", e);
+				}
+			}
+			else {
+				LOG.info("ChromeCast found, but we already have one: {} ({})", name, chromecast.getAddress());
+			}
+		}
+		else {
+			LOG.info("Not the ChromeCast we are looking for: {} ({})", name, chromecast.getAddress());
+		}
+	}
+
+	private static UpnpService startUpnpService (final Args args, final GoalSeeker goalSeeker) throws IOException, UnknownHostException, ValidationException {
 		final String hostName = InetAddress.getLocalHost().getHostName();
 		LOG.info("hostName: {}", hostName);
 
@@ -176,6 +205,8 @@ public class Main {
 		final UpnpService upnpService = makeUpnpServer();
 		upnpService.getRegistry().addDevice(makeMediaRendererDevice(friendlyName, usi, goalSeeker));
 		upnpService.getControlPoint().search();// In case this helps announce our presence.  Unproven.
+
+		return upnpService;
 	}
 
 	private static UpnpService makeUpnpServer () throws IOException {
