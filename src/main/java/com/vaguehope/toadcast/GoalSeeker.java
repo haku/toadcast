@@ -243,7 +243,15 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 			final Timestamped<Double> lop = this.lastObservedPosition;
 			if (this.ourMediaSessionId > 0 && lop.age(TimeUnit.SECONDS) < WAIT_FOR_MEDIA_SESSION_END_TIMEOUT_SECONDS) return;
 
-			CastHelper.readyChromeCast(c, cStatus);
+			try {
+				CastHelper.readyChromeCast(c, cStatus);
+			}
+			catch (final ChromeCastInUseException e) {
+				LOG.warn("Failed to ready ChromeCast, going to paused: {}", e.toString());
+				this.targetPaused = true;
+				return; // Made a change, so return.
+			}
+
 			final MediaStatus afterLoad = c.load(tState.toChromeCastMedia(), null);
 			if (afterLoad != null) {
 				this.ourMediaSessionId = afterLoad.mediaSessionId;
