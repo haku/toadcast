@@ -1,7 +1,11 @@
 package com.vaguehope.toadcast;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
+import org.fourthline.cling.model.meta.RemoteDevice;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,8 +16,14 @@ import su.litvak.chromecast.api.v2.Status;
 
 public class CastHelper {
 
+	private static final Set<String> CHROMECAST_MODEL_NAMES = new HashSet<>(Arrays.asList(
+			"Eureka Dongle", "Chromecast Audio"));
 	private static final String CHROME_CAST_DEFAULT_APP_ID = "CC1AD845";
 	private static final Logger LOG = LoggerFactory.getLogger(CastHelper.class);
+
+	public static boolean isChromecast (final RemoteDevice device) {
+		return CHROMECAST_MODEL_NAMES.contains(device.getDetails().getModelDetails().getModelName());
+	}
 
 	/**
 	 * May not return null.

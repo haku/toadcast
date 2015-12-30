@@ -151,9 +151,12 @@ public class Main {
 			@Override
 			public void remoteDeviceAdded (final Registry registry, final RemoteDevice device) {
 				try {
-					if ("Eureka Dongle".equals(device.getDetails().getModelDetails().getModelName())) {
-						final String name = device.getDetails().getFriendlyName();
-						final String host = device.getDetails().getBaseURL().getHost();
+					final String name = device.getDetails().getFriendlyName();
+					final String host = device.getDetails().getBaseURL().getHost();
+					LOG.debug("Found UPNP device: name={}, host={}, model={}.",
+							name, host, device.getDetails().getModelDetails().getModelName());
+
+					if (CastHelper.isChromecast(device)) {
 						LOG.info("Found ChromeCast via UPNP: ({}) ({})", name, host);
 
 						final ChromeCast chromecast = new ChromeCast(host);
