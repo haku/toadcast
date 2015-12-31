@@ -151,10 +151,11 @@ public class Main {
 			@Override
 			public void remoteDeviceAdded (final Registry registry, final RemoteDevice device) {
 				try {
-					final String name = device.getDetails().getFriendlyName();
-					final String host = device.getDetails().getBaseURL().getHost();
-					LOG.debug("Found UPNP device: name={}, host={}, model={}.",
-							name, host, device.getDetails().getModelDetails().getModelName());
+					final DeviceDetails details = device.getDetails();
+					final String name = details != null ? details.getFriendlyName() : null;
+					final String host = details != null && details.getBaseURL() != null ? details.getBaseURL().getHost() : null;
+					final String modelName = details != null && details.getModelDetails() != null ? details.getModelDetails().getModelName() : null;
+					LOG.debug("Found UPNP device: name={}, host={}, model={}.", name, host, modelName);
 
 					if (CastHelper.isChromecast(device)) {
 						LOG.info("Found ChromeCast via UPNP: ({}) ({})", name, host);

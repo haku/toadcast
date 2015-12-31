@@ -24,6 +24,8 @@ public class CastHelper {
 	private static final Logger LOG = LoggerFactory.getLogger(CastHelper.class);
 
 	public static boolean isChromecast (final RemoteDevice device) {
+		if (device.getDetails() == null) return false;
+		if (device.getDetails().getModelDetails() == null) return false;
 		return CHROMECAST_MODEL_NAMES.contains(device.getDetails().getModelDetails().getModelName());
 	}
 
