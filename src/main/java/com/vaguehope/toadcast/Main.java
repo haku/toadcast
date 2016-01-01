@@ -177,7 +177,7 @@ public class Main {
 		if (name != null && name.toLowerCase(Locale.ENGLISH).contains(args.getChromecast().toLowerCase(Locale.ENGLISH))) {
 			if (holder.compareAndSet(null, chromecast)) {
 				chromecast.registerListener(eventListener);
-				LOG.info("ChromeCast found: {} ({})", name, chromecast.getAddress());
+				LOG.info("ChromeCast found: {} ({}:{})", name, chromecast.getAddress(), chromecast.getPort());
 
 				try {
 					ChromeCasts.stopDiscovery();
@@ -187,11 +187,11 @@ public class Main {
 				}
 			}
 			else {
-				LOG.info("ChromeCast found, but we already have one: {} ({})", name, chromecast.getAddress());
+				LOG.info("ChromeCast found, but we already have one: {} ({}:{})", name, chromecast.getAddress(), chromecast.getPort());
 			}
 		}
 		else {
-			LOG.info("Not the ChromeCast we are looking for: {} ({})", name, chromecast.getAddress());
+			LOG.info("Not the ChromeCast we are looking for: {} ({}:{})", name, chromecast.getAddress(), chromecast.getPort());
 		}
 	}
 
