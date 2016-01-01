@@ -158,8 +158,11 @@ public class MyAVTransportService extends AbstractAVTransportService {
 				transportState = TransportState.TRANSITIONING;
 			}
 		}
-		else {
+		else if (this.goalSeeker.isChromeCastFound()) { // No target but ChomeCast is found.
 			transportState = TransportState.NO_MEDIA_PRESENT;
+		}
+		else { // No target and no ChromeCast.
+			transportState = TransportState.CUSTOM;
 		}
 
 		return new TransportInfo(transportState);

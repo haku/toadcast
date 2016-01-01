@@ -296,6 +296,10 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 		setLastObservedPosition(cMStatus.currentTime);
 	}
 
+	public boolean isChromeCastFound() {
+		return this.chromecastHolder.get() != null;
+	}
+
 	/**
 	 * @param newStatus
 	 *            May be null.
