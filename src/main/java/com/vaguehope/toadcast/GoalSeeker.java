@@ -10,12 +10,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.lang3.StringUtils;
-import org.codehaus.jackson.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import su.litvak.chromecast.api.v2.ChromeCast;
-import su.litvak.chromecast.api.v2.ChromeCastEventListener;
+import su.litvak.chromecast.api.v2.ChromeCastSpontaneousEvent;
+import su.litvak.chromecast.api.v2.ChromeCastSpontaneousEventListener;
 import su.litvak.chromecast.api.v2.ChromeCasts;
 import su.litvak.chromecast.api.v2.Media;
 import su.litvak.chromecast.api.v2.MediaStatus;
@@ -23,7 +23,7 @@ import su.litvak.chromecast.api.v2.MediaStatus.IdleReason;
 import su.litvak.chromecast.api.v2.MediaStatus.PlayerState;
 import su.litvak.chromecast.api.v2.Status;
 
-public class GoalSeeker implements Runnable, ChromeCastEventListener {
+public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener {
 
 	private static final long POLL_INTERVAL_MILLIS = TimeUnit.SECONDS.toMillis(1);
 
@@ -252,7 +252,7 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 				return; // Made a change, so return.
 			}
 
-			final MediaStatus afterLoad = c.load(tState.toChromeCastMedia(), null);
+			final MediaStatus afterLoad = c.load(tState.toChromeCastMedia());
 			if (afterLoad != null) {
 				this.ourMediaSessionId = afterLoad.mediaSessionId;
 				setCurrentMediaStatus(afterLoad);
@@ -355,7 +355,18 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 	}
 
 	@Override
-	public void onSpontaneousMediaStatus (final MediaStatus mediaStatus) {
+	public void spontaneousEventReceived (final ChromeCastSpontaneousEvent event) {
+		switch (event.getType()) {
+			case MEDIA_STATUS:
+				onSpontaneousMediaStatus(event.getData(MediaStatus.class));
+			case STATUS:
+				onSpontaneousStatus(event.getData(Status.class));
+			default:
+				onUnidentifiedSpontaneousEvent(event.getData());
+		}
+	}
+
+	private void onSpontaneousMediaStatus (final MediaStatus mediaStatus) {
 		LOG.info("Spontaneous media status: mediaSessionId={} playerState={} idleReason={}",
 				mediaStatus.mediaSessionId, mediaStatus.playerState, mediaStatus.idleReason);
 		try {
@@ -366,13 +377,11 @@ public class GoalSeeker implements Runnable, ChromeCastEventListener {
 		}
 	}
 
-	@Override
-	public void onSpontaneousStatus (final Status status) {
+	private void onSpontaneousStatus (final Status status) {
 		LOG.debug("Spontaneous status: {}", status);
 	}
 
-	@Override
-	public void onUnidentifiedSpontaneousEvent (final JsonNode event) {
+	private void onUnidentifiedSpontaneousEvent (final Object event) {
 		LOG.debug("Spontaneous event: {}", event);
 	}
 

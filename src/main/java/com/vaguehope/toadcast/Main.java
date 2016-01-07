@@ -48,7 +48,7 @@ import org.slf4j.LoggerFactory;
 import com.sun.akuma.Daemon;
 
 import su.litvak.chromecast.api.v2.ChromeCast;
-import su.litvak.chromecast.api.v2.ChromeCastEventListener;
+import su.litvak.chromecast.api.v2.ChromeCastSpontaneousEventListener;
 import su.litvak.chromecast.api.v2.ChromeCasts;
 import su.litvak.chromecast.api.v2.ChromeCastsListener;
 
@@ -115,7 +115,7 @@ public class Main {
 		startUpnpChromecastDiscovery(args, holder, goalSeeker, upnpService);
 	}
 
-	private static void startMdnsChromecastDiscovery (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastEventListener eventListener) throws Exception {// NOSONAR
+	private static void startMdnsChromecastDiscovery (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastSpontaneousEventListener eventListener) throws Exception {// NOSONAR
 		Runtime.getRuntime().addShutdownHook(new Thread() {
 			@Override
 			public void run () {
@@ -146,7 +146,7 @@ public class Main {
 		LOG.info("Watching for ChromeCast {} ...", args.getChromecast());
 	}
 
-	private static void startUpnpChromecastDiscovery (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastEventListener eventListener, final UpnpService upnpService) {
+	private static void startUpnpChromecastDiscovery (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastSpontaneousEventListener eventListener, final UpnpService upnpService) {
 		upnpService.getRegistry().addListener(	new DefaultRegistryListener(){
 			@Override
 			public void remoteDeviceAdded (final Registry registry, final RemoteDevice device) {
@@ -172,7 +172,7 @@ public class Main {
 		});
 	}
 
-	private static void chromecastFound (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastEventListener eventListener, final ChromeCast chromecast) {
+	private static void chromecastFound (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastSpontaneousEventListener eventListener, final ChromeCast chromecast) {
 		final String name = chromecast.getName();
 		if (name != null && name.toLowerCase(Locale.ENGLISH).contains(args.getChromecast().toLowerCase(Locale.ENGLISH))) {
 			if (holder.compareAndSet(null, chromecast)) {
