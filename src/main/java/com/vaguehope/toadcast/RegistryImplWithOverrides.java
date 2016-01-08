@@ -17,7 +17,7 @@ public class RegistryImplWithOverrides extends RegistryImpl {
 	}
 
 	@Override
-	public synchronized Resource getResource (final URI pathQuery) throws IllegalArgumentException {
+	public synchronized Resource<?> getResource (final URI pathQuery) throws IllegalArgumentException {
 		final Resource<?> res = this.pathToResource.get(pathQuery.getPath());
 		if (res != null) return res;
 		return super.getResource(pathQuery);
