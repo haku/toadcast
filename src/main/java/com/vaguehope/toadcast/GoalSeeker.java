@@ -155,7 +155,7 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 				markLastSuccess();
 			}
 			catch (final Exception e) {
-				LOG.warn("Failed to connect: ", e);
+				LOG.warn("Failed to connect: {}", e.toString());
 				checkNoSuccessTimeout(c);
 				return;
 			}

@@ -90,7 +90,7 @@ public class CastFinder {
 				}
 			}
 			else {
-				LOG.info("ChromeCast found via {}, but we already have one: {} ({}:{})", discoveryMethod, name, chromecast.getAddress(), chromecast.getPort());
+				LOG.info("ChromeCast found via {} (but we already have one): {} ({}:{})", discoveryMethod, name, chromecast.getAddress(), chromecast.getPort());
 			}
 		}
 		else {
