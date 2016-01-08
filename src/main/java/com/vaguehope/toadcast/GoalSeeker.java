@@ -360,8 +360,10 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 		switch (event.getType()) {
 			case MEDIA_STATUS:
 				onSpontaneousMediaStatus(event.getData(MediaStatus.class));
+				break;
 			case STATUS:
 				onSpontaneousStatus(event.getData(Status.class));
+				break;
 			default:
 				onUnidentifiedSpontaneousEvent(event.getData());
 		}
