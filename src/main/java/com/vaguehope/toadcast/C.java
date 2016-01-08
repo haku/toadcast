@@ -1,5 +1,9 @@
 package com.vaguehope.toadcast;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
 public interface C {
 
 	String APPNAME = "ToadCast";
@@ -9,6 +13,14 @@ public interface C {
 	String METADATA_MODEL_NAME = "ToadCast";
 	String METADATA_MODEL_DESCRIPTION = "ToadCast DLNA --> ChromeCast Bridge Service";
 	String METADATA_MODEL_NUMBER = "v1";
+
+	Set<String> CHROMECAST_MODEL_NAMES = new HashSet<>(Arrays.asList(
+			"Eureka Dongle", "Chromecast Audio"));
+
+	Set<String> CAN_INTERUPT_APP_NAMES = new HashSet<>(Arrays.asList(
+			"Backdrop"));
+
+	String CHROME_CAST_DEFAULT_APP_ID = "CC1AD845";
 
 	/**
 	 * How often to search for new UPNP devices that have not announced correctly.

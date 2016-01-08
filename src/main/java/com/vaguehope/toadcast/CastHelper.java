@@ -1,9 +1,6 @@
 package com.vaguehope.toadcast;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
 
 import org.fourthline.cling.model.meta.RemoteDevice;
 import org.slf4j.Logger;
@@ -16,17 +13,12 @@ import su.litvak.chromecast.api.v2.Status;
 
 public class CastHelper {
 
-	private static final Set<String> CHROMECAST_MODEL_NAMES = new HashSet<>(Arrays.asList(
-			"Eureka Dongle", "Chromecast Audio"));
-	private static final Set<String> CAN_INTERUPT_APP_NAMES = new HashSet<>(Arrays.asList(
-			"Backdrop"));
-	private static final String CHROME_CAST_DEFAULT_APP_ID = "CC1AD845";
 	private static final Logger LOG = LoggerFactory.getLogger(CastHelper.class);
 
 	public static boolean isChromecast (final RemoteDevice device) {
 		if (device.getDetails() == null) return false;
 		if (device.getDetails().getModelDetails() == null) return false;
-		return CHROMECAST_MODEL_NAMES.contains(device.getDetails().getModelDetails().getModelName());
+		return C.CHROMECAST_MODEL_NAMES.contains(device.getDetails().getModelDetails().getModelName());
 	}
 
 	/**
@@ -43,7 +35,7 @@ public class CastHelper {
 	}
 
 	public static boolean isRunningDefaultApp (final Status status) throws IOException {
-		return CHROME_CAST_DEFAULT_APP_ID.equals(readRunningAppId(status));
+		return C.CHROME_CAST_DEFAULT_APP_ID.equals(readRunningAppId(status));
 	}
 
 	private static String readRunningAppId (final Status status) throws IOException {
@@ -54,16 +46,16 @@ public class CastHelper {
 
 	public static void readyChromeCast (final ChromeCast c, final Status status) throws IOException {
 		final String runningAppId = readRunningAppId(status);
-		if (!CHROME_CAST_DEFAULT_APP_ID.equals(runningAppId)) {
+		if (!C.CHROME_CAST_DEFAULT_APP_ID.equals(runningAppId)) {
 			if (runningAppId != null) {
 				final Application app = status.getRunningApp();
-				if (!CAN_INTERUPT_APP_NAMES.contains(app.name)) throw new ChromeCastInUseException(c, app);
+				if (!C.CAN_INTERUPT_APP_NAMES.contains(app.name)) throw new ChromeCastInUseException(c, app);
 				LOG.info("Interupting running app: appId={}, name={}, status={}.",
 						app.id, app.name, app.statusText);
 				c.stopApp();
 			}
 			LOG.info("Launching default app...");
-			c.launchApp(CHROME_CAST_DEFAULT_APP_ID);
+			c.launchApp(C.CHROME_CAST_DEFAULT_APP_ID);
 		}
 	}
 
