@@ -14,7 +14,7 @@ public interface C {
 	 * How often to search for new UPNP devices that have not announced correctly.
 	 * Like Chromecasts.
 	 */
-	int UPNP_SEARCH_INTERVAL_SECONDS = 15;
+	int UPNP_SEARCH_INTERVAL_SECONDS = 30;
 
 	/**
 	 * Shorter version of org.teleal.cling.model.Constants.MIN_ADVERTISEMENT_AGE_SECONDS.
