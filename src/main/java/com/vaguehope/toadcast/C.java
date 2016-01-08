@@ -11,6 +11,12 @@ public interface C {
 	String METADATA_MODEL_NUMBER = "v1";
 
 	/**
+	 * How often to search for new UPNP devices that have not announced correctly.
+	 * Like Chromecasts.
+	 */
+	int UPNP_SEARCH_INTERVAL_SECONDS = 15;
+
+	/**
 	 * Shorter version of org.teleal.cling.model.Constants.MIN_ADVERTISEMENT_AGE_SECONDS.
 	 * Remove when Cling 2.0 has a stable release.
 	 * http://4thline.org/projects/mailinglists.html#nabble-td2183974

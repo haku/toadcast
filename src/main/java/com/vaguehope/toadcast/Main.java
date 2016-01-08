@@ -9,7 +9,9 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -107,11 +109,15 @@ public class Main {
 	}
 
 	private static void start (final Args args) throws Exception {// NOSONAR
+		final ExecutorService caEs = Executors.newCachedThreadPool();
+		final ScheduledExecutorService schEs = Executors.newScheduledThreadPool(1);
+
 		final AtomicReference<ChromeCast> holder = new AtomicReference<ChromeCast>();
 		final GoalSeeker goalSeeker = new GoalSeeker(holder);
-		Executors.newCachedThreadPool().execute(goalSeeker);
+		caEs.execute(goalSeeker);
+
 		startMdnsChromecastDiscovery(args, holder, goalSeeker);
-		final UpnpService upnpService = startUpnpService(args, goalSeeker);
+		final UpnpService upnpService = startUpnpService(args, goalSeeker, schEs);
 		startUpnpChromecastDiscovery(args, holder, goalSeeker, upnpService);
 	}
 
@@ -134,7 +140,7 @@ public class Main {
 		ChromeCasts.registerListener(new ChromeCastsListener() {
 			@Override
 			public void newChromeCastDiscovered (final ChromeCast chromecast) {
-				chromecastFound(args, holder, eventListener, chromecast);
+				chromecastFound(args, holder, eventListener, chromecast, "mDNS");
 			}
 
 			@Override
@@ -147,7 +153,7 @@ public class Main {
 	}
 
 	private static void startUpnpChromecastDiscovery (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastSpontaneousEventListener eventListener, final UpnpService upnpService) {
-		upnpService.getRegistry().addListener(	new DefaultRegistryListener(){
+		upnpService.getRegistry().addListener(new DefaultRegistryListener(){
 			@Override
 			public void remoteDeviceAdded (final Registry registry, final RemoteDevice device) {
 				try {
@@ -158,11 +164,9 @@ public class Main {
 					LOG.debug("Found UPNP device: name={}, host={}, model={}.", name, host, modelName);
 
 					if (CastHelper.isChromecast(device)) {
-						LOG.info("Found ChromeCast via UPNP: ({}) ({})", name, host);
-
 						final ChromeCast chromecast = new ChromeCast(host);
 						chromecast.setName(name);
-						chromecastFound(args, holder, eventListener, chromecast);
+						chromecastFound(args, holder, eventListener, chromecast, "UPnP");
 					}
 				}
 				catch (final Exception e) {
@@ -172,12 +176,12 @@ public class Main {
 		});
 	}
 
-	private static void chromecastFound (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastSpontaneousEventListener eventListener, final ChromeCast chromecast) {
+	private static void chromecastFound (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastSpontaneousEventListener eventListener, final ChromeCast chromecast, final String discoveryMethod) {
 		final String name = chromecast.getName();
 		if (name != null && name.toLowerCase(Locale.ENGLISH).contains(args.getChromecast().toLowerCase(Locale.ENGLISH))) {
 			if (holder.compareAndSet(null, chromecast)) {
 				chromecast.registerListener(eventListener);
-				LOG.info("ChromeCast found: {} ({}:{})", name, chromecast.getAddress(), chromecast.getPort());
+				LOG.info("ChromeCast found via {}: {} ({}:{})", discoveryMethod, name, chromecast.getAddress(), chromecast.getPort());
 
 				try {
 					ChromeCasts.stopDiscovery();
@@ -187,15 +191,15 @@ public class Main {
 				}
 			}
 			else {
-				LOG.info("ChromeCast found, but we already have one: {} ({}:{})", name, chromecast.getAddress(), chromecast.getPort());
+				LOG.info("ChromeCast found via {}, but we already have one: {} ({}:{})", discoveryMethod, name, chromecast.getAddress(), chromecast.getPort());
 			}
 		}
 		else {
-			LOG.info("Not the ChromeCast we are looking for: {} ({}:{})", name, chromecast.getAddress(), chromecast.getPort());
+			LOG.info("Not the ChromeCast we are looking for via {}: {} ({}:{})", discoveryMethod, name, chromecast.getAddress(), chromecast.getPort());
 		}
 	}
 
-	private static UpnpService startUpnpService (final Args args, final GoalSeeker goalSeeker) throws IOException, UnknownHostException, ValidationException {
+	private static UpnpService startUpnpService (final Args args, final GoalSeeker goalSeeker, final ScheduledExecutorService schEs) throws IOException, UnknownHostException, ValidationException {
 		final String hostName = InetAddress.getLocalHost().getHostName();
 		LOG.info("hostName: {}", hostName);
 
@@ -207,8 +211,14 @@ public class Main {
 		LOG.info("uniqueSystemIdentifier: {}", usi);
 
 		final UpnpService upnpService = makeUpnpServer();
-		upnpService.getRegistry().addDevice(makeMediaRendererDevice(friendlyName, usi, goalSeeker));
-		upnpService.getControlPoint().search();// In case this helps announce our presence.  Unproven.
+		upnpService.getRegistry().addDevice(makeMediaRendererDevice(friendlyName, usi, goalSeeker, schEs));
+
+		schEs.scheduleWithFixedDelay(new Runnable() {
+			@Override
+			public void run () {
+				upnpService.getControlPoint().search();
+			}
+		}, 0, C.UPNP_SEARCH_INTERVAL_SECONDS, TimeUnit.SECONDS);
 
 		return upnpService;
 	}
@@ -250,7 +260,7 @@ public class Main {
 		}
 	}
 
-	private static LocalDevice makeMediaRendererDevice (final String friendlyName, final UDN usi, final GoalSeeker goalSeeker) throws IOException, ValidationException {
+	private static LocalDevice makeMediaRendererDevice (final String friendlyName, final UDN usi, final GoalSeeker goalSeeker, final ScheduledExecutorService schEs) throws IOException, ValidationException {
 		final DeviceType type = new UDADeviceType("MediaRenderer", 1);
 		final DeviceDetails details = new DeviceDetails(friendlyName, new ManufacturerDetails(C.METADATA_MANUFACTURER), new ModelDetails(C.METADATA_MODEL_NAME, C.METADATA_MODEL_DESCRIPTION, C.METADATA_MODEL_NUMBER));
 		final Icon icon = createDeviceIcon();
@@ -304,7 +314,7 @@ public class Main {
 			}
 		});
 
-		Executors.newScheduledThreadPool(1).scheduleWithFixedDelay(new Runnable() {
+		schEs.scheduleWithFixedDelay(new Runnable() {
 			@Override
 			public void run () {
 				((LastChangeAwareServiceManager) avtSrv.getManager()).fireLastChange();
