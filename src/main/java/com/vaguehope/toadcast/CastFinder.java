@@ -22,11 +22,6 @@ public class CastFinder {
 	private static final Logger LOG = LoggerFactory.getLogger(CastFinder.class);
 
 	public static void startChromecastDiscovery (final Args args, final AtomicReference<ChromeCast> holder, final GoalSeeker goalSeeker, final UpnpService upnpService) throws IOException {
-		startMdnsChromecastDiscovery(args, holder, goalSeeker);
-		startUpnpChromecastDiscovery(args, holder, goalSeeker, upnpService);
-	}
-
-	private static void startMdnsChromecastDiscovery (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastSpontaneousEventListener eventListener) throws IOException {
 		Runtime.getRuntime().addShutdownHook(new Thread() {
 			@Override
 			public void run () {
@@ -42,6 +37,12 @@ public class CastFinder {
 				}
 			}
 		});
+
+		startMdnsChromecastDiscovery(args, holder, goalSeeker);
+		startUpnpChromecastDiscovery(args, holder, goalSeeker, upnpService);
+	}
+
+	private static void startMdnsChromecastDiscovery (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastSpontaneousEventListener eventListener) throws IOException {
 		ChromeCasts.registerListener(new ChromeCastsListener() {
 			@Override
 			public void newChromeCastDiscovered (final ChromeCast chromecast) {
