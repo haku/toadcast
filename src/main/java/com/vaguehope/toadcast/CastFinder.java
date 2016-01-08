@@ -2,7 +2,6 @@ package com.vaguehope.toadcast;
 
 import java.io.IOException;
 import java.util.Locale;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.fourthline.cling.UpnpService;
 import org.fourthline.cling.model.meta.DeviceDetails;
@@ -13,7 +12,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import su.litvak.chromecast.api.v2.ChromeCast;
-import su.litvak.chromecast.api.v2.ChromeCastSpontaneousEventListener;
 import su.litvak.chromecast.api.v2.ChromeCasts;
 import su.litvak.chromecast.api.v2.ChromeCastsListener;
 
@@ -21,45 +19,42 @@ public class CastFinder {
 
 	private static final Logger LOG = LoggerFactory.getLogger(CastFinder.class);
 
-	public static void startChromecastDiscovery (final Args args, final AtomicReference<ChromeCast> holder, final GoalSeeker goalSeeker, final UpnpService upnpService) throws IOException {
-		Runtime.getRuntime().addShutdownHook(new Thread() {
-			@Override
-			public void run () {
-				final ChromeCast c = holder.getAndSet(null);
-				if (c != null) {
-					try {
-						CastHelper.tidyChromeCast(c);
-						c.disconnect();
-					}
-					catch (final IOException e) {
-						LOG.warn("Failed to disconnect ChromeCast.", e);
-					}
-				}
-			}
-		});
+	private final Args args;
+	private final ChromeCastHolder holder;
+	private final UpnpService upnpService;
 
-		startMdnsChromecastDiscovery(args, holder, goalSeeker);
-		startUpnpChromecastDiscovery(args, holder, goalSeeker, upnpService);
+	public CastFinder (final Args args, final ChromeCastHolder holder, final UpnpService upnpService) {
+		this.args = args;
+		this.holder = holder;
+		this.upnpService = upnpService;
 	}
 
-	private static void startMdnsChromecastDiscovery (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastSpontaneousEventListener eventListener) throws IOException {
+	public void start () throws IOException {
+		startMdnsChromecastDiscovery();
+		startUpnpChromecastDiscovery();
+	}
+
+	public void rediscover () throws IOException {
+		ChromeCasts.startDiscovery();
+		this.upnpService.getRegistry().removeAllRemoteDevices();
+	}
+
+	private void startMdnsChromecastDiscovery () throws IOException {
 		ChromeCasts.registerListener(new ChromeCastsListener() {
 			@Override
 			public void newChromeCastDiscovered (final ChromeCast chromecast) {
-				chromecastFound(args, holder, eventListener, chromecast, "mDNS");
+				chromecastFound(chromecast, "mDNS");
 			}
 
 			@Override
-			public void chromeCastRemoved (final ChromeCast chromecast) {
-				LOG.info("mDNS unfound: {} (probably not a problem)", chromecast.getName());
-			}
+			public void chromeCastRemoved (final ChromeCast chromecast) {/* Unused. */}
 		});
 		ChromeCasts.startDiscovery();
-		LOG.info("Watching for ChromeCast {} ...", args.getChromecast());
+		LOG.info("Watching for ChromeCast {} ...", this.args.getChromecast());
 	}
 
-	private static void startUpnpChromecastDiscovery (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastSpontaneousEventListener eventListener, final UpnpService upnpService) {
-		upnpService.getRegistry().addListener(new DefaultRegistryListener(){
+	private void startUpnpChromecastDiscovery () {
+		this.upnpService.getRegistry().addListener(new DefaultRegistryListener(){
 			@Override
 			public void remoteDeviceAdded (final Registry registry, final RemoteDevice device) {
 				try {
@@ -72,7 +67,7 @@ public class CastFinder {
 					if (CastHelper.isChromecast(device)) {
 						final ChromeCast chromecast = new ChromeCast(host);
 						chromecast.setName(name);
-						chromecastFound(args, holder, eventListener, chromecast, "UPnP");
+						chromecastFound(chromecast, "UPnP");
 					}
 				}
 				catch (final Exception e) {
@@ -82,13 +77,11 @@ public class CastFinder {
 		});
 	}
 
-	private static void chromecastFound (final Args args, final AtomicReference<ChromeCast> holder, final ChromeCastSpontaneousEventListener eventListener, final ChromeCast chromecast, final String discoveryMethod) {
+	private void chromecastFound (final ChromeCast chromecast, final String discoveryMethod) {
 		final String name = chromecast.getName();
-		if (name != null && name.toLowerCase(Locale.ENGLISH).contains(args.getChromecast().toLowerCase(Locale.ENGLISH))) {
-			if (holder.compareAndSet(null, chromecast)) {
-				chromecast.registerListener(eventListener);
+		if (name != null && name.toLowerCase(Locale.ENGLISH).contains(this.args.getChromecast().toLowerCase(Locale.ENGLISH))) {
+			if (this.holder.compareAndSet(null, chromecast)) {
 				LOG.info("ChromeCast found via {}: {} ({}:{})", discoveryMethod, name, chromecast.getAddress(), chromecast.getPort());
-
 				try {
 					ChromeCasts.stopDiscovery();
 				}

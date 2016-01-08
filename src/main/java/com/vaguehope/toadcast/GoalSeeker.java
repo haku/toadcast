@@ -7,7 +7,6 @@ import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -16,7 +15,6 @@ import org.slf4j.LoggerFactory;
 import su.litvak.chromecast.api.v2.ChromeCast;
 import su.litvak.chromecast.api.v2.ChromeCastSpontaneousEvent;
 import su.litvak.chromecast.api.v2.ChromeCastSpontaneousEventListener;
-import su.litvak.chromecast.api.v2.ChromeCasts;
 import su.litvak.chromecast.api.v2.Media;
 import su.litvak.chromecast.api.v2.MediaStatus;
 import su.litvak.chromecast.api.v2.MediaStatus.IdleReason;
@@ -48,7 +46,8 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 
 	private static final Logger LOG = LoggerFactory.getLogger(GoalSeeker.class);
 
-	private final AtomicReference<ChromeCast> chromecastHolder;
+	private final ChromeCastHolder chromecastHolder;
+	private final CastFinder castFinder;
 
 	// Reliability tracking.
 	private volatile long lastSuccessTime;
@@ -66,8 +65,10 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 	// Recovery info.
 	private volatile Timestamped<Double> lastObservedPosition;
 
-	public GoalSeeker (final AtomicReference<ChromeCast> chromecastHolder) {
+	public GoalSeeker (final ChromeCastHolder chromecastHolder, final CastFinder castFinder) {
 		this.chromecastHolder = chromecastHolder;
+		this.chromecastHolder.addEventListener(this);
+		this.castFinder = castFinder;
 		setCurrentMediaStatus(null);
 		setLastObservedPosition(0);
 	}
@@ -184,7 +185,7 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 					c.disconnect();
 				}
 				finally {
-					ChromeCasts.startDiscovery(); // Listener in Main should still be registered.
+					this.castFinder.rediscover();
 				}
 			}
 		}

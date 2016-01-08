@@ -3,16 +3,13 @@ package com.vaguehope.toadcast;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.fourthline.cling.UpnpService;
-import org.fourthline.cling.model.ValidationException;
 import org.fourthline.cling.model.types.UDN;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
@@ -81,36 +78,55 @@ public class Main {
 		final ExecutorService caEs = Executors.newCachedThreadPool();
 		final ScheduledExecutorService schEs = Executors.newScheduledThreadPool(1);
 
-		final AtomicReference<ChromeCast> holder = new AtomicReference<ChromeCast>();
-		final GoalSeeker goalSeeker = new GoalSeeker(holder);
-		caEs.execute(goalSeeker);
-
-		final UpnpService upnpService = startUpnpService(args, goalSeeker, schEs);
-		CastFinder.startChromecastDiscovery(args, holder, goalSeeker, upnpService);
-	}
-
-	private static UpnpService startUpnpService (final Args args, final GoalSeeker goalSeeker, final ScheduledExecutorService schEs) throws IOException, UnknownHostException, ValidationException {
 		final String hostName = InetAddress.getLocalHost().getHostName();
 		LOG.info("hostName: {}", hostName);
 
 		final String friendlyName = args.getDisplayName(String.format(
-				"%s \"%s\" (%s)", C.METADATA_MODEL_NAME,
-				args.getChromecast(), hostName));
+				"%s \"%s\" (%s)",
+				C.METADATA_MODEL_NAME, args.getChromecast(), hostName));
 
 		final UDN usi = UDN.uniqueSystemIdentifier("ToadCast-ChromeCastRenderer-" + args.getChromecast());
 		LOG.info("uniqueSystemIdentifier: {}", usi);
 
 		final UpnpService upnpService = Upnp.makeUpnpServer();
+
+		final ChromeCastHolder holder = new ChromeCastHolder();
+		scheduleShutdownDisconnect(holder);
+		CastFinder castFinder = new CastFinder(args, holder, upnpService);
+
+		final GoalSeeker goalSeeker = new GoalSeeker(holder, castFinder);
+		caEs.execute(goalSeeker);
 		upnpService.getRegistry().addDevice(UpnpRenderer.makeMediaRendererDevice(friendlyName, usi, goalSeeker, schEs));
 
+		castFinder.start();
+		startReseacher(schEs, upnpService);
+	}
+
+	private static void scheduleShutdownDisconnect (final ChromeCastHolder holder) {
+		Runtime.getRuntime().addShutdownHook(new Thread() {
+			@Override
+			public void run () {
+				final ChromeCast c = holder.getAndSet(null);
+				if (c != null) {
+					try {
+						CastHelper.tidyChromeCast(c);
+						c.disconnect();
+					}
+					catch (final IOException e) {
+						LOG.warn("Failed to disconnect ChromeCast.", e);
+					}
+				}
+			}
+		});
+	}
+
+	private static void startReseacher (final ScheduledExecutorService schEs, final UpnpService upnpService) {
 		schEs.scheduleWithFixedDelay(new Runnable() {
 			@Override
 			public void run () {
 				upnpService.getControlPoint().search();
 			}
 		}, 0, C.UPNP_SEARCH_INTERVAL_SECONDS, TimeUnit.SECONDS);
-
-		return upnpService;
 	}
 
 }
