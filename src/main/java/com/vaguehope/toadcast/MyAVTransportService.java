@@ -1,6 +1,5 @@
 package com.vaguehope.toadcast;
 
-import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.EnumSet;
@@ -27,8 +26,6 @@ import org.fourthline.cling.support.model.TransportInfo;
 import org.fourthline.cling.support.model.TransportSettings;
 import org.fourthline.cling.support.model.TransportState;
 import org.fourthline.cling.support.model.item.Item;
-import org.seamless.http.HttpFetch;
-import org.seamless.util.URIUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,14 +65,6 @@ public class MyAVTransportService extends AbstractAVTransportService {
 
 		if (!"http".equalsIgnoreCase(uri.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme())) {
 			throw new AVTransportException(ErrorCode.INVALID_ARGS, "Only HTTP and HTTPS: resource identifiers are supported, not '" + uri.getScheme() + "'.");
-		}
-
-		// TODO does this really provide much value?
-		try {
-			HttpFetch.validate(URIUtil.toURL(uri));
-		}
-		catch (final IOException e) {
-			LOG.warn("URI validation failed: {}", e.toString());
 		}
 
 		final Item item;
