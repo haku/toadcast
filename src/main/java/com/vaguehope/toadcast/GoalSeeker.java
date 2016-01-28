@@ -60,10 +60,11 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 	// Where we want to be.
 	private volatile PlayingState targetPlayingState = null;
 	private volatile boolean targetPaused = false;
-	private volatile long seekToSeconds = -1;
+	private volatile double seekToSeconds = -1;
 
 	// Recovery info.
 	private volatile Timestamped<Double> lastObservedPosition;
+	private volatile Double lastObservedPositionToRestore;
 
 	public GoalSeeker (final ChromeCastHolder chromecastHolder, final CastFinder castFinder) {
 		this.chromecastHolder = chromecastHolder;
@@ -132,6 +133,14 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 				this.targetPlayingState = null;
 				setLastObservedPosition(0);
 				this.ourMediaSessionId = -2; // Session is over.
+			}
+			else if (status.playerState == PlayerState.PLAYING) {
+				final Double lop = this.lastObservedPositionToRestore;
+				if (lop != null) {
+					this.seekToSeconds = lop;
+					this.lastObservedPositionToRestore = null; // Safety.
+					LOG.info("Requested restore position to {}s.", lop);
+				}
 			}
 		}
 		else {
@@ -265,8 +274,7 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 			LOG.info("Loaded {} (mediaSessionId={}).", tState.getMediaInfo().getCurrentURI(), this.ourMediaSessionId);
 
 			if (lop.get() > MIN_POSITION_TO_RESTORE_SECONDS) {
-				c.seek(lop.get());
-				LOG.info("Restored position to {}s.", this.lastObservedPosition);
+				this.lastObservedPositionToRestore = lop.get();
 			}
 
 			return; // Made a change, so return.
