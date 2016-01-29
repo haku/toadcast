@@ -276,6 +276,9 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 			if (lop.get() > MIN_POSITION_TO_RESTORE_SECONDS) {
 				this.lastObservedPositionToRestore = lop.get();
 			}
+			else {
+				this.lastObservedPositionToRestore = null; // In case something left over.
+			}
 
 			return; // Made a change, so return.
 		}
