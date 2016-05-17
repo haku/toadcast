@@ -34,11 +34,11 @@ public class CastHelper {
 		return s;
 	}
 
-	public static boolean isRunningDefaultApp (final Status status) throws IOException {
+	public static boolean isRunningDefaultApp (final Status status) {
 		return C.CHROME_CAST_DEFAULT_APP_ID.equals(readRunningAppId(status));
 	}
 
-	private static String readRunningAppId (final Status status) throws IOException {
+	private static String readRunningAppId (final Status status) {
 		final Application runningApp = status != null ? status.getRunningApp() : null;
 		final String runningAppId = runningApp != null ? runningApp.id : null;
 		return runningAppId;

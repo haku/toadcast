@@ -24,7 +24,7 @@ public class Upnp {
 
 		final UpnpServiceImpl upnpService = new UpnpServiceImpl() {
 			@Override
-			protected Registry createRegistry (final ProtocolFactory protocolFactory) {
+			protected Registry createRegistry (final ProtocolFactory unused) {
 				return new RegistryImplWithOverrides(this, pathToRes);
 			}
 		};

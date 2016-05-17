@@ -168,7 +168,7 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 				checkNoSuccessTimeout(c);
 				return;
 			}
-		};
+		}
 
 		try {
 			readStatusAndSeekGoal(c);
@@ -392,11 +392,11 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 		}
 	}
 
-	private void onSpontaneousStatus (final Status status) {
+	private static void onSpontaneousStatus (final Status status) {
 		LOG.debug("Spontaneous status: {}", status);
 	}
 
-	private void onUnidentifiedSpontaneousEvent (final Object event) {
+	private static void onUnidentifiedSpontaneousEvent (final Object event) {
 		LOG.debug("Spontaneous event: {}", event);
 	}
 

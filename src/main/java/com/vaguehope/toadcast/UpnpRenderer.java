@@ -87,8 +87,8 @@ public class UpnpRenderer {
 		schEs.scheduleWithFixedDelay(new Runnable() {
 			@Override
 			public void run () {
-				((LastChangeAwareServiceManager) avtSrv.getManager()).fireLastChange();
-				((LastChangeAwareServiceManager) rendCtlSrv.getManager()).fireLastChange();
+				((LastChangeAwareServiceManager<?>) avtSrv.getManager()).fireLastChange();
+				((LastChangeAwareServiceManager<?>) rendCtlSrv.getManager()).fireLastChange();
 			}
 		}, 5, 5, TimeUnit.SECONDS);
 
