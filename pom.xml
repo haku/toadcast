@@ -139,7 +139,7 @@
 		<dependency> <!-- https://github.com/vitalidze/chromecast-java-api-v2 -->
 			<groupId>su.litvak.chromecast</groupId>
 			<artifactId>api-v2</artifactId>
-			<version>0.9.1</version>
+			<version>0.9.2</version>
 		</dependency>
 
 		<dependency>
