@@ -1,7 +1,9 @@
 package com.vaguehope.toadcast.transcode;
 
+import java.io.UnsupportedEncodingException;
 import java.net.BindException;
 import java.net.InetAddress;
+import java.net.URLEncoder;
 import java.util.Arrays;
 
 import org.apache.commons.lang3.StringUtils;
@@ -36,7 +38,9 @@ public class Transcoder {
 	}
 
 	public PlayingState transcode (final PlayingState tState) {
-		return tState.withAltMedia(String.format("%s/transcode?url=%s", this.externalHttp, tState.getMediaUri()), TranscodeServlet.CONTENT_TYPE_MP3);
+		return tState.withAltMedia(String.format("%s/transcode?url=%s",
+				this.externalHttp, urlEncode(tState.getMediaUri())),
+				TranscodeServlet.CONTENT_TYPE_MP3);
 	}
 
 	private static Server startServer (final String iface) throws Exception {
@@ -85,6 +89,15 @@ public class Transcoder {
 		final Connector[] connectors = server.getConnectors();
 		if (connectors.length != 1) throw new IllegalArgumentException("Expected just one connector: " + Arrays.toString(connectors));
 		return connectors[0].getPort();
+	}
+
+	private static String urlEncode (final String s) {
+		try {
+			return URLEncoder.encode(s, "UTF-8");
+		}
+		catch (final UnsupportedEncodingException e) {
+			throw new IllegalStateException(e);
+		}
 	}
 
 }
