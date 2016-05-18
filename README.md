@@ -25,8 +25,3 @@ Use the `-c` argument to specify a substring of the Chromecast's friendly name. 
 ```bash
 java -jar ./target/toadcast-1-SNAPSHOT-jar-with-dependencies.jar -c bar
 ```
-
-If it fails to discover the Chromecast, try specifying the interface to use with the `net.mdns.interface` property, e.g.:
-```bash
-java -Dnet.mdns.interface=192.168.0.213 -jar ./target/toadcast-1-SNAPSHOT-jar-with-dependencies.jar -c bar
-```

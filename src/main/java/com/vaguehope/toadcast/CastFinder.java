@@ -1,6 +1,7 @@
 package com.vaguehope.toadcast;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.util.Locale;
 
 import org.fourthline.cling.UpnpService;
@@ -19,12 +20,14 @@ public class CastFinder {
 
 	private static final Logger LOG = LoggerFactory.getLogger(CastFinder.class);
 
-	private final Args args;
+	private final InetAddress bindAddress;
+	private final String chromecastName;
 	private final ChromeCastHolder holder;
 	private final UpnpService upnpService;
 
-	public CastFinder (final Args args, final ChromeCastHolder holder, final UpnpService upnpService) {
-		this.args = args;
+	public CastFinder (final InetAddress bindAddress, final String chromecastName, final ChromeCastHolder holder, final UpnpService upnpService) {
+		this.bindAddress = bindAddress;
+		this.chromecastName = chromecastName;
 		this.holder = holder;
 		this.upnpService = upnpService;
 	}
@@ -49,8 +52,8 @@ public class CastFinder {
 			@Override
 			public void chromeCastRemoved (final ChromeCast chromecast) {/* Unused. */}
 		});
-		ChromeCasts.startDiscovery();
-		LOG.info("Watching for ChromeCast {} ...", this.args.getChromecast());
+		ChromeCasts.startDiscovery(this.bindAddress);
+		LOG.info("Watching for ChromeCast {} ...", this.chromecastName);
 	}
 
 	private void startUpnpChromecastDiscovery () {
@@ -79,7 +82,7 @@ public class CastFinder {
 
 	private void chromecastFound (final ChromeCast chromecast, final String discoveryMethod) {
 		final String name = chromecast.getName();
-		if (name != null && name.toLowerCase(Locale.ENGLISH).contains(this.args.getChromecast().toLowerCase(Locale.ENGLISH))) {
+		if (name != null && name.toLowerCase(Locale.ENGLISH).contains(this.chromecastName.toLowerCase(Locale.ENGLISH))) {
 			if (this.holder.compareAndSet(null, chromecast)) {
 				LOG.info("ChromeCast found via {}: {} ({}:{})", discoveryMethod, name, chromecast.getAddress(), chromecast.getPort());
 				try {

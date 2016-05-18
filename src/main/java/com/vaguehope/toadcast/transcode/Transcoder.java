@@ -3,7 +3,6 @@ package com.vaguehope.toadcast.transcode;
 import java.net.BindException;
 import java.net.InetAddress;
 import java.util.Arrays;
-import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.jetty.server.Connector;
@@ -17,7 +16,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.vaguehope.toadcast.PlayingState;
-import com.vaguehope.toadcast.util.NetHelper;
 
 public class Transcoder {
 
@@ -27,20 +25,9 @@ public class Transcoder {
 
 	private final String externalHttp;
 
-	public Transcoder (final String iface) throws Exception {
-		final InetAddress address;
-		if (iface != null) {
-			address = InetAddress.getByName(iface);
-			LOG.info("using address: {}", address);
-		}
-		else {
-			final List<InetAddress> addresses = NetHelper.getIpAddresses();
-			address = addresses.iterator().next();
-			LOG.info("addresses: {} using address: {}", addresses, address);
-		}
-
-		final Server server = startServer(address.getHostAddress());
-		this.externalHttp = "http://" + address.getHostAddress() + ":" + findConnectorPort(server);
+	public Transcoder (final InetAddress bindAddress) throws Exception {
+		final Server server = startServer(bindAddress.getHostAddress());
+		this.externalHttp = "http://" + bindAddress.getHostAddress() + ":" + findConnectorPort(server);
 		LOG.info("externalHttp: {}", this.externalHttp);
 	}
 

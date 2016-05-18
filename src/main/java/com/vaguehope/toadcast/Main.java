@@ -3,6 +3,9 @@ package com.vaguehope.toadcast;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.net.InetAddress;
+import java.net.SocketException;
+import java.net.UnknownHostException;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -16,10 +19,11 @@ import org.kohsuke.args4j.CmdLineParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import su.litvak.chromecast.api.v2.ChromeCast;
+
 import com.sun.akuma.Daemon;
 import com.vaguehope.toadcast.transcode.Transcoder;
-
-import su.litvak.chromecast.api.v2.ChromeCast;
+import com.vaguehope.toadcast.util.NetHelper;
 
 public class Main {
 
@@ -79,8 +83,8 @@ public class Main {
 		final ExecutorService caEs = Executors.newCachedThreadPool();
 		final ScheduledExecutorService schEs = Executors.newScheduledThreadPool(1);
 
-		final String hostName = InetAddress.getLocalHost().getHostName();
-		LOG.info("hostName: {}", hostName);
+		final InetAddress bindAddress = findInterface(args);
+		final String hostName = findHostName(bindAddress);
 
 		final String friendlyName = args.getDisplayName(String.format(
 				"%s \"%s\" (%s)",
@@ -91,11 +95,11 @@ public class Main {
 
 		final UpnpService upnpService = Upnp.makeUpnpServer();
 
-		final Transcoder transcoder = args.isAudio() ? new Transcoder(args.getInterface()) : null;
+		final Transcoder transcoder = args.isAudio() ? new Transcoder(bindAddress) : null;
 
 		final ChromeCastHolder holder = new ChromeCastHolder();
 		scheduleShutdownDisconnect(holder);
-		CastFinder castFinder = new CastFinder(args, holder, upnpService);
+		final CastFinder castFinder = new CastFinder(bindAddress, args.getChromecast(), holder, upnpService);
 
 		final GoalSeeker goalSeeker = new GoalSeeker(holder, castFinder, transcoder);
 		caEs.execute(goalSeeker);
@@ -103,6 +107,27 @@ public class Main {
 
 		castFinder.start();
 		startReseacher(schEs, upnpService);
+	}
+
+	private static InetAddress findInterface (final Args args) throws UnknownHostException, SocketException {
+		final InetAddress iface;
+		if (args.getInterface() != null) {
+			iface = InetAddress.getByName(args.getInterface());
+			LOG.info("using interface: {}", iface);
+		}
+		else {
+			final List<InetAddress> addresses = NetHelper.getIpAddresses();
+			iface = addresses.iterator().next();
+			LOG.info("interfaces: {}, using interface: {}", addresses, iface);
+		}
+		return iface;
+	}
+
+	private static String findHostName (final InetAddress iface) throws UnknownHostException {
+		String hostName = iface.getHostName();
+		if (hostName.contains(iface.getHostAddress())) hostName = InetAddress.getLocalHost().getHostName();
+		LOG.info("hostName: {}", hostName);
+		return hostName;
 	}
 
 	private static void scheduleShutdownDisconnect (final ChromeCastHolder holder) {
