@@ -21,6 +21,8 @@ import su.litvak.chromecast.api.v2.MediaStatus.IdleReason;
 import su.litvak.chromecast.api.v2.MediaStatus.PlayerState;
 import su.litvak.chromecast.api.v2.Status;
 
+import com.vaguehope.toadcast.transcode.Transcoder;
+
 public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener {
 
 	private static final long POLL_INTERVAL_MILLIS = TimeUnit.SECONDS.toMillis(1);
@@ -48,6 +50,7 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 
 	private final ChromeCastHolder chromecastHolder;
 	private final CastFinder castFinder;
+	private final Transcoder transcoder;
 
 	// Reliability tracking.
 	private volatile long lastSuccessTime;
@@ -66,8 +69,9 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 	private volatile Timestamped<Double> lastObservedPosition;
 	private volatile Double lastObservedPositionToRestore;
 
-	public GoalSeeker (final ChromeCastHolder chromecastHolder, final CastFinder castFinder) {
+	public GoalSeeker (final ChromeCastHolder chromecastHolder, final CastFinder castFinder, final Transcoder transcoder) {
 		this.chromecastHolder = chromecastHolder;
+		this.transcoder = transcoder;
 		this.chromecastHolder.addEventListener(this);
 		this.castFinder = castFinder;
 		setCurrentMediaStatus(null);
@@ -217,7 +221,7 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 
 	private void seekGoal (final ChromeCast c, final Status cStatus, final MediaStatus cMStatus) throws IOException {
 		// Capture target.
-		final PlayingState tState = this.targetPlayingState;
+		final PlayingState tState = transcodeIfRequired(this.targetPlayingState);
 		final boolean tPaused = this.targetPaused;
 
 		if (tState == null && !CastHelper.isRunningDefaultApp(cStatus)) {
@@ -227,7 +231,7 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 		// Get things ready to compare.
 		final Media cMedia = cMStatus != null ? cMStatus.media : null;
 		final String cUrl = cMedia != null ? StringUtils.trimToNull(cMedia.url) : null;
-		final String tUri = tState != null ? StringUtils.trimToNull(tState.getMediaInfo().getCurrentURI()) : null;
+		final String tUri = tState != null ? StringUtils.trimToNull(tState.getMediaUri()) : null;
 		final PlayerState cState = cMStatus != null ? cMStatus.playerState : null;
 
 		// Should stop?
@@ -263,7 +267,8 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 			}
 
 			LOG.info("media={} state={}, loading ...", cMedia, cState);
-			final MediaStatus afterLoad = c.load(tState.toChromeCastMedia());
+			final Media mediaToLoad = tState.toChromeCastMedia();
+			final MediaStatus afterLoad = c.load(mediaToLoad);
 			if (afterLoad != null) {
 				this.ourMediaSessionId = afterLoad.mediaSessionId;
 				setCurrentMediaStatus(afterLoad);
@@ -271,7 +276,7 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 			else {
 				this.ourMediaSessionId = -2;
 			}
-			LOG.info("Loaded {} (mediaSessionId={}).", tState.getMediaInfo().getCurrentURI(), this.ourMediaSessionId);
+			LOG.info("Loaded {} (mediaSessionId={}).", mediaToLoad, this.ourMediaSessionId);
 
 			if (lop.get() > MIN_POSITION_TO_RESTORE_SECONDS) {
 				this.lastObservedPositionToRestore = lop.get();
@@ -307,6 +312,19 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 		}
 
 		setLastObservedPosition(cMStatus.currentTime);
+	}
+
+	private PlayingState transcodeIfRequired (final PlayingState tState) {
+		if (tState == null) return null;
+
+		final String uri = StringUtils.trimToNull(tState.getMediaUri());
+		if (uri == null) return null;
+
+		if (this.transcoder != null && this.transcoder.transcodeRequired(tState.getContentType())) {
+			return this.transcoder.transcode(tState);
+		}
+
+		return tState;
 	}
 
 	public boolean isChromeCastFound() {

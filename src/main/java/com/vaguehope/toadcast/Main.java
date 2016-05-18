@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.sun.akuma.Daemon;
+import com.vaguehope.toadcast.transcode.Transcoder;
 
 import su.litvak.chromecast.api.v2.ChromeCast;
 
@@ -90,11 +91,13 @@ public class Main {
 
 		final UpnpService upnpService = Upnp.makeUpnpServer();
 
+		final Transcoder transcoder = args.isAudio() ? new Transcoder(args.getInterface()) : null;
+
 		final ChromeCastHolder holder = new ChromeCastHolder();
 		scheduleShutdownDisconnect(holder);
 		CastFinder castFinder = new CastFinder(args, holder, upnpService);
 
-		final GoalSeeker goalSeeker = new GoalSeeker(holder, castFinder);
+		final GoalSeeker goalSeeker = new GoalSeeker(holder, castFinder, transcoder);
 		caEs.execute(goalSeeker);
 		upnpService.getRegistry().addDevice(UpnpRenderer.makeMediaRendererDevice(friendlyName, usi, goalSeeker, schEs));
 
