@@ -267,8 +267,8 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 				return; // Made a change, so return.
 			}
 
-			LOG.info("media={} state={}, loading ...", cMedia, cState);
 			final Media mediaToLoad = tState.toChromeCastMedia();
+			LOG.info("media={} state={}, loading {} ...", cMedia, cState, mediaToLoad);
 			final MediaStatus afterLoad = c.load(mediaToLoad);
 			if (afterLoad != null) {
 				this.ourMediaSessionId = afterLoad.mediaSessionId;
