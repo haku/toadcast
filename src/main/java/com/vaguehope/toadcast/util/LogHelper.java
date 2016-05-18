@@ -1,4 +1,4 @@
-package com.vaguehope.toadcast;
+package com.vaguehope.toadcast.util;
 
 import java.util.logging.LogManager;
 

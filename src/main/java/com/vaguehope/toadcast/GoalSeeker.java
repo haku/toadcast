@@ -22,6 +22,7 @@ import su.litvak.chromecast.api.v2.MediaStatus.PlayerState;
 import su.litvak.chromecast.api.v2.Status;
 
 import com.vaguehope.toadcast.transcode.Transcoder;
+import com.vaguehope.toadcast.util.Timestamped;
 
 public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener {
 
