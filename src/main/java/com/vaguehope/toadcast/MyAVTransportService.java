@@ -163,35 +163,37 @@ public class MyAVTransportService extends AbstractAVTransportService {
 	public PositionInfo getPositionInfo (final UnsignedIntegerFourBytes instanceId) throws AVTransportException {
 		final PlayingState staged = this.stagedPlayingState;
 		if (staged != null) {
-			return mediaStatusToPositionInfo(staged.getMediaInfo());
+			return mediaStatusToPositionInfo(staged.getMediaInfo(), staged.getDurationSeconds());
 		}
 
 		final PlayingState target = this.goalSeeker.getTargetPlayingState();
 		if (target != null) {
 			final MediaStatus mediaStatus = this.goalSeeker.getCurrentMediaStatus().get();// TODO check freshness?
-			return mediaStatusToPositionInfo(mediaStatus, target.getMediaInfo());
+			return mediaStatusToPositionInfo(mediaStatus, target.getMediaInfo(), target.getDurationSeconds());
 		}
 
 		return new PositionInfo();
 	}
 
-	private static PositionInfo mediaStatusToPositionInfo (final MediaInfo mediaInfo) {
-		return mediaStatusToPositionInfo(null, mediaInfo);
+	private static PositionInfo mediaStatusToPositionInfo (final MediaInfo mediaInfo, final long fallbackDurationSeconds) {
+		return mediaStatusToPositionInfo(null, mediaInfo, fallbackDurationSeconds);
 	}
 
-	private static PositionInfo mediaStatusToPositionInfo (final MediaStatus mediaStatus, final MediaInfo mediaInfo) {
+	private static PositionInfo mediaStatusToPositionInfo (final MediaStatus mediaStatus, final MediaInfo mediaInfo, final long fallbackDurationSeconds) {
 		if (mediaInfo == null) throw new IllegalArgumentException("mediaInfo must not be null.");
 
-		String duration = "00:00:00";
-		String position = "00:00:00";
-		if (mediaStatus != null) {
-			if (mediaStatus.media != null) {
-				if (mediaStatus.media.duration != null) {
-					duration = ModelUtil.toTimeString(mediaStatus.media.duration.longValue());
-				}
-			}
-			position = ModelUtil.toTimeString((long) mediaStatus.currentTime);
+		String duration = null;
+		if (mediaStatus != null && mediaStatus.media != null && mediaStatus.media.duration != null) {
+			duration = ModelUtil.toTimeString(mediaStatus.media.duration.longValue());
 		}
+		else if (fallbackDurationSeconds > 0L) {
+			duration = ModelUtil.toTimeString(fallbackDurationSeconds);
+		}
+		if (duration == null) duration = "00:00:00";
+
+		String position = null;
+		if (mediaStatus != null) position = ModelUtil.toTimeString((long) mediaStatus.currentTime);
+		if (position == null) position = "00:00:00";
 
 		String trackUri = mediaInfo.getCurrentURI();
 		if (trackUri == null) trackUri = "";

@@ -102,6 +102,10 @@ public class PlayingState {
 		return this.contentType;
 	}
 
+	public long getDurationSeconds () {
+		return this.durationSeconds;
+	}
+
 	/**
 	 * https://developers.google.com/cast/docs/reference/messages#MediaInformation
 	 */
