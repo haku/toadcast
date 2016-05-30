@@ -95,7 +95,8 @@ public class TranscodeServlet extends HttpServlet {
 				LOG.info("Transcode complete, served {} bytes.", bytesSend);
 			}
 			catch (final IOException e) {
-				if (ExceptionHelper.causedBy(e, IOException.class, "Connection reset by peer")) {
+				if (ExceptionHelper.causedBy(e, IOException.class, "Connection reset by peer")
+						|| ExceptionHelper.causedBy(e, org.eclipse.jetty.io.EofException.class)) {
 					procShouldBeRunning = false;
 				}
 				else {
