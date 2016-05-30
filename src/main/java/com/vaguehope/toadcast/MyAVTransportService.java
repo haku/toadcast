@@ -103,7 +103,7 @@ public class MyAVTransportService extends AbstractAVTransportService {
 		final PlayingState staged = this.stagedPlayingState;
 		if (staged != null) return staged.getMediaInfo();
 
-		final PlayingState target = this.goalSeeker.getTargetPlayingState();
+		final PlayingState target = this.goalSeeker.getTargetPlayingStateRequested();
 		if (target != null) return target.getMediaInfo();
 
 		return new MediaInfo();
@@ -113,11 +113,11 @@ public class MyAVTransportService extends AbstractAVTransportService {
 	public TransportInfo getTransportInfo (final UnsignedIntegerFourBytes instanceId) throws AVTransportException {
 		final TransportState transportState;
 
-		final PlayingState tState = this.goalSeeker.getTargetPlayingState();
+		final PlayingState tState = this.goalSeeker.getTargetPlayingStateAdapted(); // Adapted because want to match URI.
 		final boolean tPaused = this.goalSeeker.isTargetPaused();
 		final Timestamped<MediaStatus> mediaStatusHolder = this.goalSeeker.getCurrentMediaStatus(); // TODO check freshness?
 		if (tState != null) {
-			final String tUrl = StringUtils.trimToNull(tState.getMediaInfo().getCurrentURI());
+			final String tUrl = StringUtils.trimToNull(tState.getMediaUri());
 			final MediaStatus cStatus = mediaStatusHolder.get();
 			final Media cMedia = cStatus != null ? cStatus.media : null;
 			final String cUrl = cMedia != null ? StringUtils.trimToNull(cMedia.url) : null;
@@ -166,7 +166,7 @@ public class MyAVTransportService extends AbstractAVTransportService {
 			return mediaStatusToPositionInfo(staged.getMediaInfo(), staged.getDurationSeconds());
 		}
 
-		final PlayingState target = this.goalSeeker.getTargetPlayingState();
+		final PlayingState target = this.goalSeeker.getTargetPlayingStateRequested();
 		if (target != null) {
 			final MediaStatus mediaStatus = this.goalSeeker.getCurrentMediaStatus().get();// TODO check freshness?
 			return mediaStatusToPositionInfo(mediaStatus, target.getMediaInfo(), target.getDurationSeconds());

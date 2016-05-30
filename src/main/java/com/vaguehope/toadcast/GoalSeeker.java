@@ -62,7 +62,8 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 	private final BlockingQueue<Object> eventQueue = new LinkedBlockingQueue<>();
 
 	// Where we want to be.
-	private volatile PlayingState targetPlayingState = null;
+	private volatile PlayingState targetPlayingStateRequested = null; // As asked for.
+	private volatile PlayingState targetPlayingStateAdapted = null; // May include transcode.
 	private volatile boolean targetPaused = false;
 	private volatile double seekToSeconds = -1;
 
@@ -135,7 +136,7 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 		if (status.mediaSessionId == this.ourMediaSessionId) {
 			if (GOAL_REACHED_IF_IDLE_REASONS.contains(status.idleReason)) {
 				LOG.info("Goal for mediaSessionId={} reached by idle reason: {}", this.ourMediaSessionId, status.idleReason);
-				this.targetPlayingState = null;
+				setTargetPlayingState(null);
 				setLastObservedPosition(0);
 				this.ourMediaSessionId = -2; // Session is over.
 			}
@@ -222,7 +223,7 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 
 	private void seekGoal (final ChromeCast c, final Status cStatus, final MediaStatus cMStatus) throws IOException {
 		// Capture target.
-		final PlayingState tState = transcodeIfRequired(this.targetPlayingState);
+		final PlayingState tState = this.targetPlayingStateAdapted;
 		final boolean tPaused = this.targetPaused;
 
 		if (tState == null && !CastHelper.isRunningDefaultApp(cStatus)) {
@@ -347,8 +348,23 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 		return this.currentMediaStatus;
 	}
 
-	public PlayingState getTargetPlayingState () {
-		return this.targetPlayingState;
+	private void setTargetPlayingState (final PlayingState playingState) {
+		this.targetPlayingStateRequested = playingState;
+		this.targetPlayingStateAdapted = transcodeIfRequired(playingState);
+	}
+
+	/**
+	 * Exactly what was asked for.
+	 */
+	public PlayingState getTargetPlayingStateRequested () {
+		return this.targetPlayingStateRequested;
+	}
+
+	/**
+	 * What is send to Chomecast, e.g. may include transcode.
+	 */
+	public PlayingState getTargetPlayingStateAdapted () {
+		return this.targetPlayingStateAdapted;
 	}
 
 	public boolean isTargetPaused () {
@@ -361,7 +377,7 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 
 	public void gotoPlaying (final PlayingState playingState) {
 		setLastObservedPosition(0); // Set before state.
-		this.targetPlayingState = playingState;
+		setTargetPlayingState(playingState);
 		this.targetPaused = false;
 		this.eventQueue.offer(Boolean.TRUE);
 	}
@@ -377,7 +393,7 @@ public class GoalSeeker implements Runnable, ChromeCastSpontaneousEventListener 
 	}
 
 	public void gotoStopped () {
-		this.targetPlayingState = null;
+		setTargetPlayingState(null);
 		setLastObservedPosition(0); // Set after state.
 		this.eventQueue.offer(Boolean.TRUE);
 	}
